@@ -220,17 +220,17 @@ type Workspace struct {
 
 ### Checklist
 
-- [ ] The `Store` struct must hold a `sync.RWMutex` and protect all reads and writes. The store will be accessed from multiple goroutines (background idle polling + MCP request handlers).
-- [ ] Implement `NewStore(path string) (*Store, error)` — creates the file and parent dirs if absent; loads existing data if the file exists.
-- [ ] Implement the following methods on `*Store`. Each write method must call an internal `flush()` that atomically writes to a temp file then renames it over the target (avoids corruption on crash):
+- [x] The `Store` struct must hold a `sync.RWMutex` and protect all reads and writes. The store will be accessed from multiple goroutines (background idle polling + MCP request handlers).
+- [x] Implement `NewStore(path string) (*Store, error)` — creates the file and parent dirs if absent; loads existing data if the file exists.
+- [x] Implement the following methods on `*Store`. Each write method must call an internal `flush()` that atomically writes to a temp file then renames it over the target (avoids corruption on crash):
   - `Add(ws Workspace) error` — rejects if `ws.Name` already exists with status `active`
   - `Get(id string) (Workspace, error)`
   - `GetByName(name string) (Workspace, error)`
   - `List(includeArchived bool) []Workspace`
   - `Update(id string, apply func(*Workspace)) error` — applies a mutation function and flushes
   - `Delete(id string) error` — hard-deletes from the JSON file (only used for cleanup; normal flow uses `Update` to set status)
-- [ ] Use `crypto/rand` (or `github.com/google/uuid` if you prefer a library) to generate workspace IDs.
-- [ ] Write unit tests using `t.TempDir()` for the file path. Test concurrent access using `t.Parallel()` and at least 10 goroutines calling `Add`/`Get`/`List` simultaneously to surface race conditions. Always run tests with `-race`.
+- [x] Use `crypto/rand` (or `github.com/google/uuid` if you prefer a library) to generate workspace IDs.
+- [x] Write unit tests using `t.TempDir()` for the file path. Test concurrent access using `t.Parallel()` and at least 10 goroutines calling `Add`/`Get`/`List` simultaneously to surface race conditions. Always run tests with `-race`.
 
 ---
 
