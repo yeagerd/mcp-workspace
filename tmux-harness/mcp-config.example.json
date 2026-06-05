@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "tmux-harness": {
+      "command": "/path/to/tmux-harness",
+      "args": ["--config", "/path/to/harness-config.json"],
+      "env": {
+        "HARNESS_REPO_PATH": "/path/to/your/git/repo"
+      }
+    }
+  }
+}

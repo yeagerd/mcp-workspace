@@ -453,10 +453,10 @@ All steps before MCP server startup must write only to `stderr`. The MCP server 
 
 ### Checklist
 
-- [ ] Write an `mcp-config.example.json` file showing how to register the harness server in Claude Code's MCP config. The server entry must use the `command` transport type, pointing to the compiled binary.
-- [ ] Document how to register the server in Hermes/cabinet's MCP config (generic stdio entry).
+- [x] Write an `mcp-config.example.json` file showing how to register the harness server in Claude Code's MCP config. The server entry must use the `command` transport type, pointing to the compiled binary.
+- [x] Document how to register the server in Hermes/cabinet's MCP config (generic stdio entry).
 - [ ] Verify that all seven tools and the pane resource are visible in Claude Code after registering the server (use the MCP Inspector tool or `/mcp` slash command in Claude Code).
-- [ ] Write a README section titled "Two-Claude Setup" that explains the topology:
+- [x] Write a README section titled "Two-Claude Setup" that explains the topology:
   - One Claude Code instance = the orchestrator (Hermes). It has the harness MCP registered.
   - N Claude Code instances = workers. They run inside the harness's tmux sessions.
   - The orchestrator creates workspaces, sends prompts, polls for idleness, reads output, and archives when done.
@@ -475,19 +475,19 @@ All steps before MCP server startup must write only to `stderr`. The MCP server 
 
 ### Checklist
 
-- [ ] README must include, in this order:
-  - [ ] One-paragraph description of what the project does
-  - [ ] Prerequisites (tmux version, git version, Go version, Claude Code CLI)
-  - [ ] Build instructions (`make build` or `go build -o tmux-harness .`)
-  - [ ] Configuration reference (all fields, env var names, defaults)
-  - [ ] How to register with Claude Code (`--mcp-config` example)
-  - [ ] How to register with Hermes / cabinet (generic stdio MCP config)
-  - [ ] All tool descriptions with input/output schemas
-  - [ ] Busy/idle detection: how it works and how to tune `threshold_ms`
-  - [ ] How to manually attach to a session
-  - [ ] Startup reconciliation behavior (what happens to orphaned workspaces)
-  - [ ] Known limitations (single-repo per server instance, no auth on stdio)
-  - [ ] Troubleshooting: "Claude Code didn't launch in tmux", "worktree already exists", "store is out of sync", "session shows busy indefinitely"
+- [x] README must include, in this order:
+  - [x] One-paragraph description of what the project does
+  - [x] Prerequisites (tmux version, git version, Go version, Claude Code CLI)
+  - [x] Build instructions (`make build` or `go build -o tmux-harness .`)
+  - [x] Configuration reference (all fields, env var names, defaults)
+  - [x] How to register with Claude Code (`--mcp-config` example)
+  - [x] How to register with Hermes / cabinet (generic stdio MCP config)
+  - [x] All tool descriptions with input/output schemas
+  - [x] Busy/idle detection: how it works and how to tune `threshold_ms`
+  - [x] How to manually attach to a session
+  - [x] Startup reconciliation behavior (what happens to orphaned workspaces)
+  - [x] Known limitations (single-repo per server instance, no auth on stdio)
+  - [x] Troubleshooting: "Claude Code didn't launch in tmux", "worktree already exists", "store is out of sync", "session shows busy indefinitely"
 
 ---
 
