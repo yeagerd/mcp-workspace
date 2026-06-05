@@ -103,11 +103,31 @@ The project plan in `tmux-claude-harness-project-plan-2.md` contains phases with
 
 5. **Check off** — mark the task complete in `tmux-claude-harness-project-plan-2.md` by changing `- [ ]` to `- [x]`.
 
-6. **Commit** — stage the relevant files and commit with a message that references the phase and task. Format:
+6. **Commit** — stage the relevant files and commit using [Conventional Commits](https://www.conventionalcommits.org/). Format:
    ```
-   phase<N>: <short description of what was done>
+   <type>(<scope>): <short description>
    ```
-   Example: `phase2: implement tmux.SessionExists with mock Executor`
+   The scope is optional but encouraged — use the package name (e.g. `tmux`, `store`, `workspace`).
+
+   | Type | When to use |
+   |------|-------------|
+   | `feat` | Adds, adjusts, or removes a feature of the API or UI |
+   | `fix` | Fixes a bug in a preceded `feat` |
+   | `refactor` | Rewrites/restructures code without changing behavior |
+   | `perf` | A `refactor` that specifically improves performance |
+   | `style` | White-space, formatting, missing semicolons — no behavior change |
+   | `test` | Adds missing tests or corrects existing ones |
+   | `docs` | Documentation only |
+   | `build` | Build tools, dependencies, project version |
+   | `ops` | Infrastructure, deployment, CI/CD, monitoring |
+   | `chore` | Initial commit, `.gitignore`, housekeeping |
+
+   Examples:
+   ```
+   feat(tmux): implement SessionExists with mock Executor
+   test(store): add concurrent Add/Get stress test with -race
+   build: add golangci-lint config with errcheck and staticcheck
+   ```
 
 7. **Move to the next task** — only after the commit succeeds.
 
