@@ -13,12 +13,12 @@ Module path: `github.com/articulant/tmux-harness/client`
 
 ## Phase 1 — Scaffold
 
-- [ ] Create `client/main.go` — package `main`, calls `client.Execute()`, mirrors the
+- [x] Create `client/main.go` — package `main`, calls `client.Execute()`, mirrors the
   pattern in `main.go` + `cmd/root.go`.
-- [ ] Create `client/client.go` — package `client`, defines `Execute()`, top-level
+- [x] Create `client/client.go` — package `client`, defines `Execute()`, top-level
   `flag.FlagSet` with `--config <path>` and `--binary <path>` flags, dispatches to
   subcommand handlers. Print usage (all subcommands) when no args given; exit 1.
-- [ ] Add `bin/harness-client` target to `Makefile`:
+- [x] Add `bin/harness-client` target to `Makefile`:
   ```makefile
   build:
       go build -o bin/$(BINARY) .

@@ -4,6 +4,7 @@ BINARY := tmux-harness
 
 build:
 	go build -o bin/$(BINARY) .
+	go build -o bin/harness-client ./client
 
 test:
 	go test -race -short ./...

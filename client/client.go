@@ -1,0 +1,104 @@
+package main
+
+import (
+	"flag"
+	"fmt"
+	"os"
+)
+
+const clientVersion = "0.1.0"
+
+// Execute is the entry point for the harness-client binary.
+func Execute(args []string) error {
+	fs := flag.NewFlagSet("harness-client", flag.ContinueOnError)
+	var configPath string
+	var binaryPath string
+	var jsonOut bool
+	var showVersion bool
+
+	fs.StringVar(&configPath, "config", "", "path to config JSON file passed to tmux-harness")
+	fs.StringVar(&binaryPath, "binary", "", "path to tmux-harness binary (default: bin/tmux-harness)")
+	fs.BoolVar(&jsonOut, "json", false, "emit raw JSON output instead of human-readable text")
+	fs.BoolVar(&showVersion, "version", false, "print version and exit")
+
+	fs.Usage = printUsage
+
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	if showVersion {
+		fmt.Printf("harness-client %s\n", clientVersion)
+		return nil
+	}
+
+	remaining := fs.Args()
+	if len(remaining) == 0 {
+		printUsage()
+		os.Exit(1)
+	}
+
+	subcommand := remaining[0]
+	subArgs := remaining[1:]
+
+	opts := globalOpts{
+		configPath: configPath,
+		binaryPath: binaryPath,
+		jsonOut:    jsonOut,
+	}
+
+	switch subcommand {
+	case "list":
+		return cmdList(opts, subArgs)
+	case "create":
+		return cmdCreate(opts, subArgs)
+	case "archive":
+		return cmdArchive(opts, subArgs)
+	case "delete":
+		return cmdDelete(opts, subArgs)
+	case "send":
+		return cmdSend(opts, subArgs)
+	case "read":
+		return cmdRead(opts, subArgs)
+	case "idle":
+		return cmdIdle(opts, subArgs)
+	case "wait-idle":
+		return cmdWaitIdle(opts, subArgs)
+	case "attach-hint":
+		return cmdAttachHint(opts, subArgs)
+	default:
+		fmt.Fprintf(os.Stderr, "harness-client: unknown subcommand %q\n\n", subcommand)
+		printUsage()
+		os.Exit(1)
+	}
+	return nil
+}
+
+// globalOpts holds flags shared across all subcommands.
+type globalOpts struct {
+	configPath string
+	binaryPath string
+	jsonOut    bool
+}
+
+func printUsage() {
+	fmt.Print(`Usage: harness-client [--config <path>] [--binary <path>] [--json] [--version] <subcommand> [args]
+
+Subcommands:
+  list          List all workspaces
+  create        Create a new workspace
+  archive       Archive a workspace
+  delete        Permanently delete a workspace
+  send          Send text to a workspace session
+  read          Read terminal output from a workspace
+  idle          Check whether a workspace is idle
+  wait-idle     Wait until a workspace becomes idle
+  attach-hint   Print the tmux attach command for a workspace
+
+Flags:
+  --config <path>   Path to config JSON file passed to tmux-harness
+  --binary <path>   Path to tmux-harness binary (default: bin/tmux-harness)
+  --json            Emit raw JSON output instead of human-readable text
+  --version         Print version and exit
+`)
+}
