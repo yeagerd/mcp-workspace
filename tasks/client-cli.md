@@ -113,7 +113,7 @@ Each subcommand follows the same pattern:
 
 ### 3g — `idle`
 
-- [ ] Implement `client/cmd_idle.go`: subcommand `idle <id>`.
+- [x] Implement `client/cmd_idle.go`: subcommand `idle <id>`.
   - Positional arg: `id` (required).
   - Flag: `--threshold-ms <n>` (int64, default 0 = server default).
   - MCP tool: `workspace_idle`.
