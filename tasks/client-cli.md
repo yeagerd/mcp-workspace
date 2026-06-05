@@ -170,12 +170,12 @@ Each subcommand follows the same pattern:
 
 ## Phase 5 — Polish
 
-- [ ] Top-level usage: when called with no subcommand or `--help`, print a usage block
+- [x] Top-level usage: when called with no subcommand or `--help`, print a usage block
   listing every subcommand with a one-line description, then exit 0.
-- [ ] Consistent error format: all errors written to stderr as
+- [x] Consistent error format: all errors written to stderr as
   `harness-client <subcommand>: <message>\n`; process exits with code 1.
-- [ ] `--version` flag at top level: prints the same version string as the server.
-- [ ] Confirm `go vet ./client/...` and `golangci-lint run ./client/...` are clean.
+- [x] `--version` flag at top level: prints the same version string as the server.
+- [x] Confirm `go vet ./client/...` and `golangci-lint run ./client/...` are clean.
 
 ---
 

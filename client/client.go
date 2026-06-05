@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -24,6 +25,10 @@ func Execute(args []string) error {
 	fs.Usage = printUsage
 
 	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			// printUsage already called by fs.Usage; exit 0.
+			os.Exit(0)
+		}
 		return err
 	}
 
@@ -35,7 +40,7 @@ func Execute(args []string) error {
 	remaining := fs.Args()
 	if len(remaining) == 0 {
 		printUsage()
-		os.Exit(1)
+		os.Exit(0)
 	}
 
 	subcommand := remaining[0]
