@@ -240,8 +240,8 @@ type Workspace struct {
 
 ### Checklist
 
-- [ ] Write `internal/workspace/workspace.go`. Define a `Manager` struct that holds references to the tmux client, worktree client, store, and config.
-- [ ] Implement `Create(ctx context.Context, opts CreateOptions) (store.Workspace, error)`:
+- [x] Write `internal/workspace/workspace.go`. Define a `Manager` struct that holds references to the tmux client, worktree client, store, and config.
+- [x] Implement `Create(ctx context.Context, opts CreateOptions) (store.Workspace, error)`:
   - `CreateOptions` fields: `Name string`, `Branch string` (optional), `Meta map[string]string`
   - Validate `Name`: lowercase alphanumeric and hyphens only, 1–40 chars, no reserved words (`new`, `list`, `delete`). Return a typed `ErrInvalidName` if invalid.
   - Reject if `store.List(false)` already contains an active workspace with that name.
@@ -253,29 +253,29 @@ type Workspace struct {
   - Call `store.Add(ws)`. On failure, kill the tmux session and remove the worktree before returning.
   - Return the workspace.
 
-- [ ] Implement `Archive(ctx context.Context, id string) (store.Workspace, error)`:
+- [x] Implement `Archive(ctx context.Context, id string) (store.Workspace, error)`:
   - Look up workspace; return `ErrNotFound` if missing, `ErrAlreadyArchived` if status is not `active`.
   - Send `exit` to the tmux session via `SendKeys`.
   - Poll `tmux.SessionExists` every 200 ms for up to 5 s. If still alive after 5 s, call `tmux.KillSession`.
   - Call `worktree.Remove(worktreePath, false)`. If it fails with a "dirty worktree" error from git, try `Remove(..., true)` (force) and log a warning to stderr.
   - Call `store.Update` to set `status = archived` and `archivedAt`.
 
-- [ ] Implement `Delete(ctx context.Context, id string) error`:
+- [x] Implement `Delete(ctx context.Context, id string) error`:
   - Like `Archive` but also calls `git branch -d <branch>` (or `-D` if force). This is the only destructive-to-git operation; document it prominently.
   - Callers must pass `confirmed bool` — if false, return `ErrDeleteNotConfirmed` without doing anything.
 
-- [ ] Implement `List(includeArchived bool) []store.Workspace` — direct pass-through to store.
+- [x] Implement `List(includeArchived bool) []store.Workspace` — direct pass-through to store.
 
-- [ ] Implement `Get(id string) (store.Workspace, error)` and `GetByName(name string) (store.Workspace, error)`.
+- [x] Implement `Get(id string) (store.Workspace, error)` and `GetByName(name string) (store.Workspace, error)`.
 
-- [ ] Implement `Reconcile(ctx context.Context) error` — called at startup:
+- [x] Implement `Reconcile(ctx context.Context) error` — called at startup:
   - For each workspace with status `active`, call `tmux.SessionExists`.
   - If the session no longer exists, call `store.Update` to set status `orphaned` and log the workspace name to stderr.
   - If a tmux session with the harness prefix exists but is not in the store, log a warning (do not auto-delete — the operator may have created it manually).
 
-- [ ] Define all error types as exported sentinel values in a `workspace/errors.go` file (e.g. `var ErrNotFound = errors.New("workspace not found")`). Use `fmt.Errorf("...: %w", ErrNotFound)` for wrapping.
+- [x] Define all error types as exported sentinel values in a `workspace/errors.go` file (e.g. `var ErrNotFound = errors.New("workspace not found")`). Use `fmt.Errorf("...: %w", ErrNotFound)` for wrapping.
 
-- [ ] Write integration tests tagged with `//go:build integration` build tag. These tests actually invoke tmux and git. They must clean up after themselves (defer archive/delete) and be skippable when tmux is not available (`testing.Short()` or an env var `HARNESS_INTEGRATION=1`).
+- [x] Write integration tests tagged with `//go:build integration` build tag. These tests actually invoke tmux and git. They must clean up after themselves (defer archive/delete) and be skippable when tmux is not available (`testing.Short()` or an env var `HARNESS_INTEGRATION=1`).
 
 ---
 
