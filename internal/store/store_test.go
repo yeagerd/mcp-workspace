@@ -30,7 +30,7 @@ func newWS(name string) Workspace {
 
 func TestNewStore_Empty(t *testing.T) {
 	s := newTestStore(t)
-	assert.Empty(t, s.List(true))
+	assert.Empty(t, s.List(true, ""))
 }
 
 func TestNewStore_LoadsExistingData(t *testing.T) {
@@ -43,7 +43,7 @@ func TestNewStore_LoadsExistingData(t *testing.T) {
 
 	s2, err := NewStore(path)
 	require.NoError(t, err)
-	list := s2.List(false)
+	list := s2.List(false, "")
 	require.Len(t, list, 1)
 	assert.Equal(t, "alpha", list[0].Name)
 }
@@ -54,7 +54,7 @@ func TestAdd_AssignsID(t *testing.T) {
 	ws.ID = ""
 	require.NoError(t, s.Add(ws))
 
-	all := s.List(true)
+	all := s.List(true, "")
 	require.Len(t, all, 1)
 	assert.NotEmpty(t, all[0].ID)
 }
@@ -70,7 +70,7 @@ func TestAdd_AllowsDuplicateNameIfArchived(t *testing.T) {
 	s := newTestStore(t)
 	ws := newWS("reuse")
 	require.NoError(t, s.Add(ws))
-	all := s.List(true)
+	all := s.List(true, "")
 	require.Len(t, all, 1)
 
 	// Archive it.
@@ -85,7 +85,7 @@ func TestAdd_AllowsDuplicateNameIfArchived(t *testing.T) {
 func TestGet_Happy(t *testing.T) {
 	s := newTestStore(t)
 	require.NoError(t, s.Add(newWS("getme")))
-	list := s.List(true)
+	list := s.List(true, "")
 	id := list[0].ID
 
 	ws, err := s.Get(id)
@@ -119,7 +119,7 @@ func TestList_ExcludesArchived(t *testing.T) {
 	require.NoError(t, s.Add(newWS("active1")))
 	require.NoError(t, s.Add(newWS("archived1")))
 
-	all := s.List(true)
+	all := s.List(true, "")
 	require.Len(t, all, 2)
 
 	// Archive one.
@@ -127,18 +127,18 @@ func TestList_ExcludesArchived(t *testing.T) {
 		w.Status = StatusArchived
 	}))
 
-	active := s.List(false)
+	active := s.List(false, "")
 	require.Len(t, active, 1)
 	assert.Equal(t, "active1", active[0].Name)
 
-	withArchived := s.List(true)
+	withArchived := s.List(true, "")
 	assert.Len(t, withArchived, 2)
 }
 
 func TestUpdate_Happy(t *testing.T) {
 	s := newTestStore(t)
 	require.NoError(t, s.Add(newWS("upd")))
-	id := s.List(true)[0].ID
+	id := s.List(true, "")[0].ID
 
 	require.NoError(t, s.Update(id, func(w *Workspace) {
 		w.Status = StatusArchived
@@ -158,10 +158,10 @@ func TestUpdate_NotFound(t *testing.T) {
 func TestDelete_Happy(t *testing.T) {
 	s := newTestStore(t)
 	require.NoError(t, s.Add(newWS("del")))
-	id := s.List(true)[0].ID
+	id := s.List(true, "")[0].ID
 
 	require.NoError(t, s.Delete(id))
-	assert.Empty(t, s.List(true))
+	assert.Empty(t, s.List(true, ""))
 
 	_, err := s.Get(id)
 	assert.ErrorIs(t, err, ErrNotFound)
@@ -210,7 +210,7 @@ func TestConcurrentAccess(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_ = s.List(false)
+			_ = s.List(false, "")
 		}()
 	}
 
@@ -251,7 +251,7 @@ func TestConcurrentNamedAdd(t *testing.T) {
 		assert.NoError(t, err)
 	}
 
-	assert.Len(t, s.List(false), n)
+	assert.Len(t, s.List(false, ""), n)
 }
 
 func generateName(i int) string {

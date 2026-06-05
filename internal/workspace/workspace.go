@@ -25,20 +25,49 @@ var reservedNames = map[string]bool{"new": true, "list": true, "delete": true}
 type CreateOptions struct {
 	Name   string
 	Branch string
-	Meta   map[string]string
+	// Repo is the alias of the target repo (defaults to the only repo if exactly one
+	// is configured; required when multiple repos are configured).
+	Repo string
+	Meta map[string]string
 }
 
 // Manager is the high-level workspace coordinator.
 type Manager struct {
-	tmux     *tmux.Client
-	worktree *worktree.Client
-	store    *store.Store
-	cfg      *config.Config
+	tmux      *tmux.Client
+	worktrees map[string]*worktree.Client
+	store     *store.Store
+	cfg       *config.Config
 }
 
 // New constructs a Manager.
-func New(t *tmux.Client, wt *worktree.Client, s *store.Store, cfg *config.Config) *Manager {
-	return &Manager{tmux: t, worktree: wt, store: s, cfg: cfg}
+func New(t *tmux.Client, wts map[string]*worktree.Client, s *store.Store, cfg *config.Config) *Manager {
+	return &Manager{tmux: t, worktrees: wts, store: s, cfg: cfg}
+}
+
+// repoClient looks up the worktree client for alias, returning ErrUnknownRepo if not found.
+func (m *Manager) repoClient(alias string) (*worktree.Client, error) {
+	c, ok := m.worktrees[alias]
+	if !ok {
+		return nil, fmt.Errorf("%w: %s", ErrUnknownRepo, alias)
+	}
+	return c, nil
+}
+
+// resolveRepoAlias returns the alias to use for a Create call. If opts.Repo is empty
+// and exactly one repo is configured, that one is used automatically.
+func (m *Manager) resolveRepoAlias(requested string) (string, error) {
+	if requested != "" {
+		if _, ok := m.worktrees[requested]; !ok {
+			return "", fmt.Errorf("%w: %s", ErrUnknownRepo, requested)
+		}
+		return requested, nil
+	}
+	if len(m.worktrees) == 1 {
+		for k := range m.worktrees {
+			return k, nil
+		}
+	}
+	return "", fmt.Errorf("repo is required when multiple repos are configured")
 }
 
 // Create creates a new workspace: git worktree + tmux session + Claude Code instance.
@@ -48,15 +77,27 @@ func (m *Manager) Create(ctx context.Context, opts CreateOptions) (store.Workspa
 		return store.Workspace{}, err
 	}
 
-	// Name conflict check.
-	existing := m.store.List(false)
+	repoAlias, err := m.resolveRepoAlias(opts.Repo)
+	if err != nil {
+		return store.Workspace{}, err
+	}
+
+	wt, err := m.repoClient(repoAlias)
+	if err != nil {
+		return store.Workspace{}, err
+	}
+
+	repo := m.cfg.Repos[repoAlias]
+
+	// Name conflict check (scoped to the same repo).
+	existing := m.store.List(false, "")
 	for _, ws := range existing {
-		if ws.Name == opts.Name {
+		if ws.Name == opts.Name && ws.RepoAlias == repoAlias {
 			return store.Workspace{}, fmt.Errorf("%w: %s", ErrInvalidName, opts.Name+" already exists")
 		}
 	}
 
-	// Capacity check.
+	// Capacity check (global across all repos).
 	if len(existing) >= m.cfg.MaxWorkspaces {
 		return store.Workspace{}, fmt.Errorf("%w: limit is %d", ErrCapacityReached, m.cfg.MaxWorkspaces)
 	}
@@ -67,16 +108,16 @@ func (m *Manager) Create(ctx context.Context, opts CreateOptions) (store.Workspa
 	}
 
 	sessionName := m.cfg.SessionPrefix + opts.Name
-	worktreePath := filepath.Join(m.cfg.WorktreeRoot, opts.Name)
+	worktreePath := filepath.Join(repo.WorktreeRoot, opts.Name)
 
 	// Step 1: create worktree.
-	if err := m.worktree.Add(worktreePath, branch, true); err != nil {
+	if err := wt.Add(worktreePath, branch, true); err != nil {
 		return store.Workspace{}, fmt.Errorf("creating worktree: %w", err)
 	}
 
 	// Step 2: create tmux session. On failure, remove the worktree.
 	if err := m.tmux.NewSession(sessionName, worktreePath); err != nil {
-		_ = m.worktree.Remove(worktreePath, true)
+		_ = wt.Remove(worktreePath, true)
 		return store.Workspace{}, fmt.Errorf("creating tmux session: %w", err)
 	}
 
@@ -87,7 +128,7 @@ func (m *Manager) Create(ctx context.Context, opts CreateOptions) (store.Workspa
 	// Step 3: launch Claude Code inside the session.
 	if err := m.tmux.SendKeys(sessionName, m.cfg.ClaudeCmd, true); err != nil {
 		_ = m.tmux.KillSession(sessionName)
-		_ = m.worktree.Remove(worktreePath, true)
+		_ = wt.Remove(worktreePath, true)
 		return store.Workspace{}, fmt.Errorf("launching claude: %w", err)
 	}
 
@@ -98,6 +139,8 @@ func (m *Manager) Create(ctx context.Context, opts CreateOptions) (store.Workspa
 		TmuxSession:   sessionName,
 		WorktreePath:  worktreePath,
 		Branch:        branch,
+		RepoAlias:     repoAlias,
+		RepoPath:      repo.Path,
 		Status:        store.StatusActive,
 		CreatedAt:     now,
 		LastChangedAt: now,
@@ -105,7 +148,7 @@ func (m *Manager) Create(ctx context.Context, opts CreateOptions) (store.Workspa
 	}
 	if err := m.store.Add(ws); err != nil {
 		_ = m.tmux.KillSession(sessionName)
-		_ = m.worktree.Remove(worktreePath, true)
+		_ = wt.Remove(worktreePath, true)
 		return store.Workspace{}, fmt.Errorf("registering workspace: %w", err)
 	}
 
@@ -144,10 +187,21 @@ func (m *Manager) Archive(ctx context.Context, id string) (store.Workspace, erro
 	// Force-kill if still alive.
 	_ = m.tmux.KillSession(ws.TmuxSession)
 
-	// Remove the worktree. Try clean first, then force if dirty.
-	if err := m.worktree.Remove(ws.WorktreePath, false); err != nil {
-		fmt.Fprintf(os.Stderr, "worktree remove failed, retrying with --force: %v\n", err)
-		_ = m.worktree.Remove(ws.WorktreePath, true)
+	// Determine which worktree client to use for removal.
+	wt, err := m.repoClient(ws.RepoAlias)
+	if err != nil {
+		// Fallback: attempt removal without a specific client (best-effort).
+		fmt.Fprintf(os.Stderr, "archive: unknown repo alias %q for workspace %q, skipping worktree remove\n",
+			ws.RepoAlias, ws.Name)
+		wt = nil
+	}
+
+	if wt != nil {
+		// Remove the worktree. Try clean first, then force if dirty.
+		if err := wt.Remove(ws.WorktreePath, false); err != nil {
+			fmt.Fprintf(os.Stderr, "worktree remove failed, retrying with --force: %v\n", err)
+			_ = wt.Remove(ws.WorktreePath, true)
+		}
 	}
 
 	// Update store.
@@ -188,14 +242,24 @@ func (m *Manager) Delete(ctx context.Context, id string, confirmed bool) error {
 		}
 	}
 
-	// Delete the git branch.
-	out, err := exec.Command("git", "-C", m.cfg.RepoPath, "branch", "-d", ws.Branch).Output() //nolint:gosec
-	if err != nil {
-		// Try force-delete.
-		out2, err2 := exec.Command("git", "-C", m.cfg.RepoPath, "branch", "-D", ws.Branch).Output() //nolint:gosec
-		if err2 != nil {
-			fmt.Fprintf(os.Stderr, "failed to delete branch %q: %v (output: %s %s)\n",
-				ws.Branch, err2, out, out2)
+	// Resolve the repo path for the git branch delete command.
+	repoPath := ws.RepoPath
+	if repoPath == "" {
+		// Fall back to cfg.Repos lookup by alias.
+		if repo, ok := m.cfg.Repos[ws.RepoAlias]; ok {
+			repoPath = repo.Path
+		}
+	}
+
+	if repoPath != "" {
+		out, err := exec.Command("git", "-C", repoPath, "branch", "-d", ws.Branch).Output() //nolint:gosec
+		if err != nil {
+			// Try force-delete.
+			out2, err2 := exec.Command("git", "-C", repoPath, "branch", "-D", ws.Branch).Output() //nolint:gosec
+			if err2 != nil {
+				fmt.Fprintf(os.Stderr, "failed to delete branch %q: %v (output: %s %s)\n",
+					ws.Branch, err2, out, out2)
+			}
 		}
 	}
 
@@ -203,8 +267,9 @@ func (m *Manager) Delete(ctx context.Context, id string, confirmed bool) error {
 }
 
 // List returns workspaces. If includeArchived is false, only active workspaces are returned.
-func (m *Manager) List(includeArchived bool) []store.Workspace {
-	return m.store.List(includeArchived)
+// If repoAlias is non-empty, only workspaces for that repo are returned.
+func (m *Manager) List(includeArchived bool, repoAlias string) []store.Workspace {
+	return m.store.List(includeArchived, repoAlias)
 }
 
 // Get returns a workspace by ID.
@@ -236,8 +301,9 @@ func (m *Manager) SendKeys(id string, text string, pressEnter bool) error {
 
 // Reconcile checks all active workspaces against live tmux sessions and marks missing
 // ones as orphaned. Called once at startup.
+// Session prefix is global (not per-repo), so reconcile is already repo-agnostic.
 func (m *Manager) Reconcile(ctx context.Context) error {
-	active := m.store.List(false)
+	active := m.store.List(false, "")
 
 	liveSessions, err := m.tmux.ListSessions(m.cfg.SessionPrefix)
 	if err != nil {

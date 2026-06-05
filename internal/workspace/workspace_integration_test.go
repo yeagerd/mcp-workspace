@@ -53,8 +53,9 @@ func setupManager(t *testing.T, repoPath string) *Manager {
 	storePath := filepath.Join(t.TempDir(), "workspaces.json")
 
 	cfg := &config.Config{
-		RepoPath:        repoPath,
-		WorktreeRoot:    wtRoot,
+		Repos: map[string]config.Repo{
+			"default": {Path: repoPath, WorktreeRoot: wtRoot},
+		},
 		StorePath:       storePath,
 		ClaudeCmd:       "echo", // use echo instead of real claude in tests
 		IdleThresholdMs: 5000,
@@ -65,7 +66,10 @@ func setupManager(t *testing.T, repoPath string) *Manager {
 	s, err := store.NewStore(storePath)
 	require.NoError(t, err)
 
-	return New(tmux.New(), worktree.New(repoPath), s, cfg)
+	wtClients := map[string]*worktree.Client{
+		"default": worktree.New(repoPath),
+	}
+	return New(tmux.New(), wtClients, s, cfg)
 }
 
 func TestIntegration_CreateAndArchive(t *testing.T) {
@@ -79,6 +83,7 @@ func TestIntegration_CreateAndArchive(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "inttest-basic", ws.Name)
 	assert.Equal(t, store.StatusActive, ws.Status)
+	assert.Equal(t, "default", ws.RepoAlias)
 
 	t.Cleanup(func() {
 		_, _ = m.Archive(ctx, ws.ID)
@@ -135,8 +140,9 @@ func TestIntegration_CapacityLimit(t *testing.T) {
 	storePath := filepath.Join(t.TempDir(), "ws.json")
 
 	cfg := &config.Config{
-		RepoPath:        repoPath,
-		WorktreeRoot:    wtRoot,
+		Repos: map[string]config.Repo{
+			"default": {Path: repoPath, WorktreeRoot: wtRoot},
+		},
 		StorePath:       storePath,
 		ClaudeCmd:       "echo",
 		IdleThresholdMs: 5000,
@@ -146,7 +152,10 @@ func TestIntegration_CapacityLimit(t *testing.T) {
 
 	s, err := store.NewStore(storePath)
 	require.NoError(t, err)
-	m := New(tmux.New(), worktree.New(repoPath), s, cfg)
+	wtClients := map[string]*worktree.Client{
+		"default": worktree.New(repoPath),
+	}
+	m := New(tmux.New(), wtClients, s, cfg)
 	ctx := context.Background()
 
 	ws, err := m.Create(ctx, CreateOptions{Name: "cap-first"})
@@ -155,4 +164,63 @@ func TestIntegration_CapacityLimit(t *testing.T) {
 
 	_, err = m.Create(ctx, CreateOptions{Name: "cap-second"})
 	assert.ErrorIs(t, err, ErrCapacityReached)
+}
+
+func TestIntegration_MultiRepo(t *testing.T) {
+	skipIfNoIntegration(t)
+
+	repo1 := setupTestRepo(t)
+	repo2 := setupTestRepo(t)
+	wt1 := t.TempDir()
+	wt2 := t.TempDir()
+	storePath := filepath.Join(t.TempDir(), "ws.json")
+
+	cfg := &config.Config{
+		Repos: map[string]config.Repo{
+			"alpha": {Path: repo1, WorktreeRoot: wt1},
+			"beta":  {Path: repo2, WorktreeRoot: wt2},
+		},
+		StorePath:       storePath,
+		ClaudeCmd:       "echo",
+		IdleThresholdMs: 5000,
+		SessionPrefix:   "harness-mr-",
+		MaxWorkspaces:   10,
+	}
+
+	s, err := store.NewStore(storePath)
+	require.NoError(t, err)
+	wtClients := map[string]*worktree.Client{
+		"alpha": worktree.New(repo1),
+		"beta":  worktree.New(repo2),
+	}
+	m := New(tmux.New(), wtClients, s, cfg)
+	ctx := context.Background()
+
+	// Create a workspace in each repo — same name is allowed across repos.
+	wsAlpha, err := m.Create(ctx, CreateOptions{Name: "feat-x", Repo: "alpha"})
+	require.NoError(t, err)
+	assert.Equal(t, "alpha", wsAlpha.RepoAlias)
+	assert.True(t, filepath.HasPrefix(wsAlpha.WorktreePath, wt1))
+
+	wsBeta, err := m.Create(ctx, CreateOptions{Name: "feat-x", Repo: "beta"})
+	require.NoError(t, err)
+	assert.Equal(t, "beta", wsBeta.RepoAlias)
+	assert.True(t, filepath.HasPrefix(wsBeta.WorktreePath, wt2))
+
+	t.Cleanup(func() {
+		_, _ = m.Archive(ctx, wsAlpha.ID)
+		_, _ = m.Archive(ctx, wsBeta.ID)
+	})
+
+	// workspace_list with repo filter returns only that repo's workspaces.
+	alphaList := m.List(false, "alpha")
+	require.Len(t, alphaList, 1)
+	assert.Equal(t, wsAlpha.ID, alphaList[0].ID)
+
+	betaList := m.List(false, "beta")
+	require.Len(t, betaList, 1)
+	assert.Equal(t, wsBeta.ID, betaList[0].ID)
+
+	allList := m.List(false, "")
+	assert.Len(t, allList, 2)
 }

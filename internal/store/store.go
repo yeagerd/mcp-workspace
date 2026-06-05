@@ -29,6 +29,8 @@ type Workspace struct {
 	TmuxSession     string            `json:"tmuxSession"`
 	WorktreePath    string            `json:"worktreePath"`
 	Branch          string            `json:"branch"`
+	RepoAlias       string            `json:"repoAlias,omitempty"`
+	RepoPath        string            `json:"repoPath,omitempty"`
 	Status          WorkspaceStatus   `json:"status"`
 	CreatedAt       time.Time         `json:"createdAt"`
 	ArchivedAt      *time.Time        `json:"archivedAt,omitempty"`
@@ -40,7 +42,8 @@ type Workspace struct {
 // ErrNotFound is returned when a lookup by ID or name yields no result.
 var ErrNotFound = errors.New("workspace not found")
 
-// ErrNameConflict is returned when adding a workspace whose name already exists with status active.
+// ErrNameConflict is returned when adding a workspace whose name already exists with status active
+// in the same repo.
 var ErrNameConflict = errors.New("active workspace with that name already exists")
 
 // Store is a concurrency-safe registry backed by a JSON file.
@@ -72,8 +75,8 @@ func NewStore(path string) (*Store, error) {
 	return s, nil
 }
 
-// Add inserts a new workspace. Rejects if an active workspace with the same name already exists.
-// The workspace ID is generated here if it is empty.
+// Add inserts a new workspace. Rejects if an active workspace with the same name and repo alias
+// already exists. The workspace ID is generated here if it is empty.
 func (s *Store) Add(ws Workspace) error {
 	if ws.ID == "" {
 		ws.ID = uuid.New().String()
@@ -83,7 +86,7 @@ func (s *Store) Add(ws Workspace) error {
 	defer s.mu.Unlock()
 
 	for _, existing := range s.data {
-		if existing.Name == ws.Name && existing.Status == StatusActive {
+		if existing.Name == ws.Name && existing.RepoAlias == ws.RepoAlias && existing.Status == StatusActive {
 			return fmt.Errorf("%w: %s", ErrNameConflict, ws.Name)
 		}
 	}
@@ -128,13 +131,17 @@ func (s *Store) GetByName(name string) (Workspace, error) {
 }
 
 // List returns all workspaces. If includeArchived is false, archived and orphaned are excluded.
-func (s *Store) List(includeArchived bool) []Workspace {
+// If repoAlias is non-empty, only workspaces with that repo alias are returned.
+func (s *Store) List(includeArchived bool, repoAlias string) []Workspace {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	result := make([]Workspace, 0, len(s.data))
 	for _, ws := range s.data {
 		if !includeArchived && ws.Status != StatusActive {
+			continue
+		}
+		if repoAlias != "" && ws.RepoAlias != repoAlias {
 			continue
 		}
 		result = append(result, ws)

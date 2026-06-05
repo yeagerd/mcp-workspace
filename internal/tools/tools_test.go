@@ -68,15 +68,16 @@ func (m *mockManager) Delete(_ context.Context, id string, confirmed bool) error
 	return workspace.ErrNotFound
 }
 
-func (m *mockManager) List(includeArchived bool) []store.Workspace {
-	if includeArchived {
-		return m.workspaces
-	}
+func (m *mockManager) List(includeArchived bool, repoAlias string) []store.Workspace {
 	var out []store.Workspace
 	for _, ws := range m.workspaces {
-		if ws.Status == store.StatusActive {
-			out = append(out, ws)
+		if !includeArchived && ws.Status != store.StatusActive {
+			continue
 		}
+		if repoAlias != "" && ws.RepoAlias != repoAlias {
+			continue
+		}
+		out = append(out, ws)
 	}
 	return out
 }
