@@ -104,7 +104,7 @@ Each subcommand follows the same pattern:
 
 ### 3f — `read`
 
-- [ ] Implement `client/cmd_read.go`: subcommand `read <id>`.
+- [x] Implement `client/cmd_read.go`: subcommand `read <id>`.
   - Positional arg: `id` (required).
   - Flag: `--lines <n>` (int, default 0 = server default).
   - MCP tool: `workspace_read`.
