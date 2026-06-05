@@ -142,7 +142,7 @@ Each subcommand follows the same pattern:
 
 ## Phase 4 — Output Formatting
 
-- [ ] **4a — Workspace list table** (`client/format.go`): function
+- [x] **4a — Workspace list table** (`client/format.go`): function
   `printTable(ws []workspaceSummary, w io.Writer)` that renders a fixed-width table:
   ```
   ID        NAME              STATUS    BRANCH            REPO   CREATED
@@ -150,7 +150,7 @@ Each subcommand follows the same pattern:
   ```
   Truncate long strings with `…` to keep columns at fixed widths. Use tab-separated
   output (no external table library).
-- [ ] **4b — Single workspace summary**: function `printWorkspace(ws workspaceSummary, w io.Writer)`
+- [x] **4b — Single workspace summary**: function `printWorkspace(ws workspaceSummary, w io.Writer)`
   that prints key-value pairs, one per line:
   ```
   id:       8e9691bc-0c72-4942-aba1-b301fef763e4
@@ -161,7 +161,7 @@ Each subcommand follows the same pattern:
   worktree: /Users/yeagerd/github/articulant/worktrees/multi-repo-support
   created:  2026-06-05 13:41:55
   ```
-- [ ] **4c — `--json` global flag**: add `--json` to the top-level `flag.FlagSet` in
+- [x] **4c — `--json` global flag**: add `--json` to the top-level `flag.FlagSet` in
   `client.go`. When set, all subcommands skip human-readable formatting and write
   the raw JSON returned by `callTool` to stdout (pretty-printed with
   `json.MarshalIndent`).
