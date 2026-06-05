@@ -3,7 +3,7 @@
 BINARY := tmux-harness
 
 build:
-	go build -o $(BINARY) .
+	go build -o bin/$(BINARY) .
 
 test:
 	go test -race -short ./...
@@ -15,4 +15,4 @@ lint:
 	golangci-lint run
 
 clean:
-	rm -f $(BINARY)
+	rm -rf bin/

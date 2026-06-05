@@ -43,7 +43,7 @@ Use `github.com/mark3labs/mcp-go`. Do **not** use `modelcontextprotocol/go-sdk` 
 ## Repository Layout
 
 ```
-tmux-harness/
+(repo root)
 ├── go.mod
 ├── go.sum
 ├── main.go                  entry point
@@ -61,6 +61,7 @@ tmux-harness/
 ├── test/fixtures/
 │   └── worktree_list_porcelain.txt
 ├── cmd/smoke/main.go        standalone smoke test
+├── bin/                     build output (gitignored)
 ├── Makefile
 ├── .golangci.yml
 └── README.md

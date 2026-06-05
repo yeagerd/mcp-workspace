@@ -45,7 +45,7 @@ Do **not** use `modelcontextprotocol/go-sdk` for this project — it is still st
 ## Repository Layout (target)
 
 ```
-tmux-harness/
+(repo root)
 ├── go.mod
 ├── go.sum
 ├── main.go                  entry point: config loading, server startup
@@ -66,6 +66,7 @@ tmux-harness/
 │   │   └── idle.go          busy/idle detection
 │   └── tools/
 │       └── tools.go         MCP tool handlers (thin layer over workspace pkg)
+├── bin/                     build output (gitignored)
 ├── test/
 │   └── fixtures/
 │       └── worktree_list_porcelain.txt   test fixture
