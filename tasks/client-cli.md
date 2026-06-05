@@ -70,7 +70,7 @@ Each subcommand follows the same pattern:
 
 ### 3b — `create`
 
-- [ ] Implement `client/cmd_create.go`: subcommand `create <name>`.
+- [x] Implement `client/cmd_create.go`: subcommand `create <name>`.
   - Positional arg: `name` (required; print usage + exit 1 if missing).
   - Flags: `--branch <branch>` (string, default ""), `--repo <alias>` (string,
     default "").

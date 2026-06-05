@@ -84,6 +84,20 @@ func printTable(ws []workspaceSummary, w io.Writer) {
 	}
 }
 
+// printWorkspace prints a single workspace as key-value pairs.
+func printWorkspace(ws workspaceSummary, w io.Writer) {
+	ew := &errWriter{w: w}
+	ew.printf("id:       %s\n", ws.ID)
+	ew.printf("name:     %s\n", ws.Name)
+	ew.printf("status:   %s\n", ws.Status)
+	ew.printf("branch:   %s\n", ws.Branch)
+	ew.printf("session:  %s\n", ws.TmuxSession)
+	ew.printf("worktree: %s\n", ws.WorktreePath)
+	if !ws.CreatedAt.IsZero() {
+		ew.printf("created:  %s\n", ws.CreatedAt.Local().Format("2006-01-02 15:04:05"))
+	}
+}
+
 // prettyPrint writes indented JSON to stdout.
 func prettyPrint(raw json.RawMessage) error {
 	out, err := json.MarshalIndent(raw, "", "  ")
