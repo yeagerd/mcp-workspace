@@ -436,14 +436,14 @@ All steps before MCP server startup must write only to `stderr`. The MCP server 
 
 ### Checklist
 
-- [ ] **Partial failure cleanup in `Create`:** If any step fails after a previous step succeeded, the cleanup path must undo all prior steps before returning. Test this with an integration test that injects a failure at each stage.
-- [ ] **Atomic store writes:** The store's `flush()` must write to `<storePath>.tmp` and then use `os.Rename` to replace the target. Verify on Linux that `os.Rename` is atomic when source and destination are on the same filesystem (they will be, since `.tmp` is in the same directory).
-- [ ] **Max workspace enforcement:** `Create` must check the count of active workspaces against `MaxWorkspaces` before touching the filesystem. Return `ErrCapacityReached`.
-- [ ] **Input sanitization for `workspace_send`:** Defined in Phase 7. Do not silently strip — return an error.
-- [ ] **Rate limiting for `workspace_send`:** Use a `map[string]time.Time` (keyed by workspace ID) protected by a `sync.Mutex`. No external dependency needed.
-- [ ] **Destructive operation guards:** `Archive` and `Delete` must look up the workspace in the store before touching tmux or git. If the workspace is not in the store, return `ErrNotFound` — never infer state from the filesystem alone.
-- [ ] **Graceful shutdown:** On `SIGINT`/`SIGTERM`, the server must stop accepting new tool calls, wait for in-flight calls to complete (with a 5 s timeout), and exit cleanly. Active tmux sessions and worktrees are left intact — they are not cleaned up on server exit.
-- [ ] **No shell injection:** Every `exec.Command` call in the tmux and worktree packages must pass arguments as separate `string` values, never via shell interpolation. Add a linter rule or code comment in each package reminding future contributors of this.
+- [x] **Partial failure cleanup in `Create`:** If any step fails after a previous step succeeded, the cleanup path must undo all prior steps before returning. Test this with an integration test that injects a failure at each stage.
+- [x] **Atomic store writes:** The store's `flush()` must write to `<storePath>.tmp` and then use `os.Rename` to replace the target. Verify on Linux that `os.Rename` is atomic when source and destination are on the same filesystem (they will be, since `.tmp` is in the same directory).
+- [x] **Max workspace enforcement:** `Create` must check the count of active workspaces against `MaxWorkspaces` before touching the filesystem. Return `ErrCapacityReached`.
+- [x] **Input sanitization for `workspace_send`:** Defined in Phase 7. Do not silently strip — return an error.
+- [x] **Rate limiting for `workspace_send`:** Use a `map[string]time.Time` (keyed by workspace ID) protected by a `sync.Mutex`. No external dependency needed.
+- [x] **Destructive operation guards:** `Archive` and `Delete` must look up the workspace in the store before touching tmux or git. If the workspace is not in the store, return `ErrNotFound` — never infer state from the filesystem alone.
+- [x] **Graceful shutdown:** On `SIGINT`/`SIGTERM`, the server must stop accepting new tool calls, wait for in-flight calls to complete (with a 5 s timeout), and exit cleanly. Active tmux sessions and worktrees are left intact — they are not cleaned up on server exit.
+- [x] **No shell injection:** Every `exec.Command` call in the tmux and worktree packages must pass arguments as separate `string` values, never via shell interpolation. Add a linter rule or code comment in each package reminding future contributors of this.
 
 ---
 
