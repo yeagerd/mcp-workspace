@@ -225,6 +225,15 @@ func (m *Manager) GetByName(name string) (store.Workspace, error) {
 	return ws, nil
 }
 
+// SendKeys sends text to the workspace's tmux session.
+func (m *Manager) SendKeys(id string, text string, pressEnter bool) error {
+	ws, err := m.store.Get(id)
+	if err != nil {
+		return fmt.Errorf("%w: %s", ErrNotFound, id)
+	}
+	return m.tmux.SendKeys(ws.TmuxSession, text, pressEnter)
+}
+
 // Reconcile checks all active workspaces against live tmux sessions and marks missing
 // ones as orphaned. Called once at startup.
 func (m *Manager) Reconcile(ctx context.Context) error {
