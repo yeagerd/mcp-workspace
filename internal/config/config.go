@@ -52,13 +52,6 @@ func Load(configPath string) (*Config, error) {
 	if cfg.WorktreeRoot == "" && cfg.RepoPath != "" {
 		cfg.WorktreeRoot = filepath.Join(filepath.Dir(cfg.RepoPath), "worktrees")
 	}
-	if cfg.StorePath == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			home = "."
-		}
-		cfg.StorePath = filepath.Join(home, ".config", "hangar", "workspaces.json")
-	}
 
 	// Environment variable overrides.
 	applyEnvString("HARNESS_REPO_PATH", &cfg.RepoPath)
@@ -69,9 +62,20 @@ func Load(configPath string) (*Config, error) {
 	applyEnvString("HARNESS_SESSION_PREFIX", &cfg.SessionPrefix)
 	applyEnvInt("HARNESS_MAX_WORKSPACES", &cfg.MaxWorkspaces)
 
-	// Re-apply WorktreeRoot default if RepoPath was set by env and WorktreeRoot still empty.
+	// Re-apply defaults that depend on RepoPath after env vars.
 	if cfg.WorktreeRoot == "" && cfg.RepoPath != "" {
 		cfg.WorktreeRoot = filepath.Join(filepath.Dir(cfg.RepoPath), "worktrees")
+	}
+	if cfg.StorePath == "" {
+		if cfg.RepoPath != "" {
+			cfg.StorePath = filepath.Join(cfg.RepoPath, ".hangar", "workspaces.json")
+		} else {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				home = "."
+			}
+			cfg.StorePath = filepath.Join(home, ".config", "hangar", "workspaces.json")
+		}
 	}
 
 	return cfg, nil

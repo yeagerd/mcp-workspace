@@ -40,3 +40,4 @@ go.work.sum
 # Runtime artifacts
 *.worktree
 config.json
+.hangar/
