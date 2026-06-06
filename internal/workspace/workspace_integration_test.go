@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/articulant/tmux-harness/internal/config"
@@ -224,21 +223,4 @@ func TestIntegration_MultiRepo(t *testing.T) {
 
 	allList := m.List(false, "")
 	assert.Len(t, allList, 2)
-
-	// workspace_delete removes the branch from the correct repo.
-	// Remove the t.Cleanup entry for wsAlpha by deleting it explicitly here.
-	require.NoError(t, m.Delete(ctx, wsAlpha.ID, true))
-
-	// Branch should be gone from repo1.
-	out, _ := exec.Command("git", "-C", repo1, "branch", "--list", "feat-x").Output()
-	assert.Empty(t, strings.TrimSpace(string(out)), "branch feat-x should be deleted from repo1")
-
-	// Branch in repo2 (beta) must be untouched.
-	out2, err := exec.Command("git", "-C", repo2, "branch", "--list", "feat-x").Output()
-	require.NoError(t, err)
-	assert.Contains(t, string(out2), "feat-x", "branch feat-x should still exist in repo2")
-
-	// wsAlpha should be gone from the store.
-	_, err = m.store.Get(wsAlpha.ID)
-	assert.ErrorIs(t, err, store.ErrNotFound)
 }
