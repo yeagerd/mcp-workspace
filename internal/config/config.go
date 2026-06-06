@@ -6,26 +6,17 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 )
-
-// Repo holds the configuration for a single git repository.
-type Repo struct {
-	Path         string `json:"path"`
-	WorktreeRoot string `json:"worktreeRoot"` // optional; defaults to ../worktrees
-}
 
 // Config holds all runtime configuration for tmux-harness.
 type Config struct {
-	RepoPath     string `json:"repoPath"`
-	WorktreeRoot string `json:"worktreeRoot"`
-
-	Repos           map[string]Repo `json:"repos"`
-	StorePath       string          `json:"storePath"`
-	ClaudeCmd       string          `json:"claudeCmd"`
-	IdleThresholdMs int             `json:"idleThresholdMs"`
-	SessionPrefix   string          `json:"sessionPrefix"`
-	MaxWorkspaces   int             `json:"maxWorkspaces"`
+	RepoPath        string `json:"repoPath"`
+	WorktreeRoot    string `json:"worktreeRoot"`
+	StorePath       string `json:"storePath"`
+	ClaudeCmd       string `json:"claudeCmd"`
+	IdleThresholdMs int    `json:"idleThresholdMs"`
+	SessionPrefix   string `json:"sessionPrefix"`
+	MaxWorkspaces   int    `json:"maxWorkspaces"`
 }
 
 const (
@@ -69,14 +60,6 @@ func Load(configPath string) (*Config, error) {
 		cfg.StorePath = filepath.Join(home, ".config", "tmux-harness", "workspaces.json")
 	}
 
-	// Derive WorktreeRoot for each repos entry that omitted it.
-	for alias, repo := range cfg.Repos {
-		if repo.WorktreeRoot == "" && repo.Path != "" {
-			repo.WorktreeRoot = filepath.Join(filepath.Dir(repo.Path), "worktrees")
-			cfg.Repos[alias] = repo
-		}
-	}
-
 	// Environment variable overrides.
 	applyEnvString("HARNESS_REPO_PATH", &cfg.RepoPath)
 	applyEnvString("HARNESS_WORKTREE_ROOT", &cfg.WorktreeRoot)
@@ -91,79 +74,34 @@ func Load(configPath string) (*Config, error) {
 		cfg.WorktreeRoot = filepath.Join(filepath.Dir(cfg.RepoPath), "worktrees")
 	}
 
-	// Parse HARNESS_REPOS: comma-separated alias=path[:worktreeRoot] pairs.
-	if v := os.Getenv("HARNESS_REPOS"); v != "" {
-		if cfg.Repos == nil {
-			cfg.Repos = make(map[string]Repo)
-		}
-		for _, entry := range strings.Split(v, ",") {
-			entry = strings.TrimSpace(entry)
-			if entry == "" {
-				continue
-			}
-			alias, pathPart, found := strings.Cut(entry, "=")
-			if !found || alias == "" {
-				return nil, fmt.Errorf("HARNESS_REPOS: invalid entry %q (expected alias=path or alias=path:worktreeRoot)", entry)
-			}
-			var repo Repo
-			if path, wtr, hasWtr := strings.Cut(pathPart, ":"); hasWtr {
-				repo.Path = path
-				repo.WorktreeRoot = wtr
-			} else {
-				repo.Path = pathPart
-				repo.WorktreeRoot = filepath.Join(filepath.Dir(pathPart), "worktrees")
-			}
-			cfg.Repos[alias] = repo
-		}
-	}
-
 	return cfg, nil
 }
 
 // Validate checks that cfg is internally consistent and the filesystem prerequisites exist.
 func Validate(cfg *Config) error {
-	// Ambiguous config: both multi-repo map and legacy single-repo field are set.
-	if len(cfg.Repos) > 0 && cfg.RepoPath != "" {
-		return fmt.Errorf("repos and repoPath cannot both be set; use repos only")
+	if cfg.RepoPath == "" {
+		return fmt.Errorf("repoPath is required")
+	}
+	if _, err := os.Stat(cfg.RepoPath); os.IsNotExist(err) {
+		return fmt.Errorf("repoPath %q does not exist", cfg.RepoPath)
 	}
 
-	// Backward compat shim: synthesise a "default" entry from legacy RepoPath/WorktreeRoot.
-	if len(cfg.Repos) == 0 && cfg.RepoPath != "" {
-		if cfg.Repos == nil {
-			cfg.Repos = make(map[string]Repo)
-		}
-		cfg.Repos["default"] = Repo{
-			Path:         cfg.RepoPath,
-			WorktreeRoot: cfg.WorktreeRoot,
-		}
+	// Check for .git directory or file.
+	gitPath := filepath.Join(cfg.RepoPath, ".git")
+	if _, err := os.Stat(gitPath); os.IsNotExist(err) {
+		return fmt.Errorf("repoPath %q does not contain a .git directory or file", cfg.RepoPath)
 	}
 
-	if len(cfg.Repos) == 0 {
-		return fmt.Errorf("at least one repo must be configured (set repos in config or repoPath for single-repo use)")
+	// WorktreeRoot parent must exist; create the directory itself if absent.
+	if cfg.WorktreeRoot == "" {
+		return fmt.Errorf("worktreeRoot is required")
 	}
-
-	// Validate each repo entry.
-	for alias, repo := range cfg.Repos {
-		if repo.Path == "" {
-			return fmt.Errorf("repo %q: path is required", alias)
-		}
-		if _, err := os.Stat(repo.Path); os.IsNotExist(err) {
-			return fmt.Errorf("repo %q: path %q does not exist", alias, repo.Path)
-		}
-		gitPath := filepath.Join(repo.Path, ".git")
-		if _, err := os.Stat(gitPath); os.IsNotExist(err) {
-			return fmt.Errorf("repo %q: path %q does not contain a .git directory or file", alias, repo.Path)
-		}
-		if repo.WorktreeRoot == "" {
-			return fmt.Errorf("repo %q: worktreeRoot is required", alias)
-		}
-		parentDir := filepath.Dir(repo.WorktreeRoot)
-		if _, err := os.Stat(parentDir); os.IsNotExist(err) {
-			return fmt.Errorf("repo %q: worktreeRoot parent directory %q does not exist", alias, parentDir)
-		}
-		if err := os.MkdirAll(repo.WorktreeRoot, 0o755); err != nil {
-			return fmt.Errorf("repo %q: creating worktreeRoot %q: %w", alias, repo.WorktreeRoot, err)
-		}
+	parentDir := filepath.Dir(cfg.WorktreeRoot)
+	if _, err := os.Stat(parentDir); os.IsNotExist(err) {
+		return fmt.Errorf("worktreeRoot parent directory %q does not exist", parentDir)
+	}
+	if err := os.MkdirAll(cfg.WorktreeRoot, 0o755); err != nil {
+		return fmt.Errorf("creating worktreeRoot %q: %w", cfg.WorktreeRoot, err)
 	}
 
 	// StorePath parent must exist; create if absent.
@@ -185,9 +123,8 @@ func Validate(cfg *Config) error {
 // PrintSummary logs resolved config values to stderr, marking defaults.
 func PrintSummary(cfg *Config) {
 	fmt.Fprintln(os.Stderr, "tmux-harness config:")
-	for alias, repo := range cfg.Repos {
-		fmt.Fprintf(os.Stderr, "  repo[%s]: path=%s worktreeRoot=%s\n", alias, repo.Path, repo.WorktreeRoot)
-	}
+	printField("  repoPath", cfg.RepoPath, "")
+	printField("  worktreeRoot", cfg.WorktreeRoot, "")
 	printField("  storePath", cfg.StorePath, "")
 	printField("  claudeCmd", cfg.ClaudeCmd, defaultClaudeCmd)
 	printField("  idleThresholdMs", strconv.Itoa(cfg.IdleThresholdMs), strconv.Itoa(defaultIdleThresholdMs))
