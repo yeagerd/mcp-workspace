@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-A Go MCP server that lets orchestrators (Claude Code, Hermes, cabinet) create and manage isolated Claude Code sessions. Each workspace is a git worktree + named tmux session + running Claude Code instance. See `tmux-claude-harness-project-plan-2.md` for the full spec and phased task list.
+A Go MCP server that lets orchestrators (Claude Code, Hermes, cabinet) create and manage isolated Claude Code sessions. Each workspace is a git worktree + named tmux session + running Claude Code instance.
 
 ## Go Toolchain
 
