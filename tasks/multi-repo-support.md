@@ -97,26 +97,26 @@ as a "register a repo on the fly" escape hatch if needed.
 
 ### Phase 1 — Config schema: named repos
 
-- [x] Add `Repo` struct to `internal/config/config.go`:
+- [ ] Add `Repo` struct to `internal/config/config.go`:
   ```go
   type Repo struct {
       Path        string `json:"path"`
       WorktreeRoot string `json:"worktreeRoot"` // optional; defaults to ../worktrees
   }
   ```
-- [x] Add `Repos map[string]Repo` field to `Config` (alongside the existing `RepoPath` for
+- [ ] Add `Repos map[string]Repo` field to `Config` (alongside the existing `RepoPath` for
   backward compat in this phase).
-- [x] In `config.Load()`, after the JSON file is parsed, derive each repo's `WorktreeRoot`
+- [ ] In `config.Load()`, after the JSON file is parsed, derive each repo's `WorktreeRoot`
   if empty (same `filepath.Dir(path)+"/worktrees"` logic used today for `WorktreeRoot`).
-- [x] In `config.Validate()`, if `Repos` is non-empty, iterate and validate each entry:
+- [ ] In `config.Validate()`, if `Repos` is non-empty, iterate and validate each entry:
   path exists, has `.git`, `WorktreeRoot` parent exists, create `WorktreeRoot` dir.
   If `Repos` is empty and `RepoPath` is set, synthesise a `Repos` entry with the alias
   `"default"` so downstream code sees one canonical shape (backward compat shim).
-- [x] If both `Repos` and `RepoPath` are set, return an error (ambiguous config).
-- [x] Add `HARNESS_REPOS` env var support: `alias=path[:worktreeRoot],…` comma-separated,
+- [ ] If both `Repos` and `RepoPath` are set, return an error (ambiguous config).
+- [ ] Add `HARNESS_REPOS` env var support: `alias=path[:worktreeRoot],…` comma-separated,
   parsed in `config.Load()` after file load, same priority as other env vars.
-- [x] Update `config.PrintSummary()` to iterate `cfg.Repos` and print each alias/path pair.
-- [x] Update `internal/config/config_test.go`:
+- [ ] Update `config.PrintSummary()` to iterate `cfg.Repos` and print each alias/path pair.
+- [ ] Update `internal/config/config_test.go`:
   - Test `Load()` with a config file containing `repos`.
   - Test `Validate()` accepts a valid multi-repo config.
   - Test `Validate()` rejects config with both `repos` and `repoPath` set.
@@ -124,82 +124,82 @@ as a "register a repo on the fly" escape hatch if needed.
 
 ### Phase 2 — Manager: per-repo worktree clients
 
-- [x] Replace `Manager.worktree *worktree.Client` with
+- [ ] Replace `Manager.worktree *worktree.Client` with
   `Manager.worktrees map[string]*worktree.Client` (keyed by alias).
-- [x] Update `workspace.New()` to accept `map[string]*worktree.Client` instead of a single
+- [ ] Update `workspace.New()` to accept `map[string]*worktree.Client` instead of a single
   client.
-- [x] Update `cmd/root.go`: replace `worktree.New(cfg.RepoPath)` with a loop over `cfg.Repos`
+- [ ] Update `cmd/root.go`: replace `worktree.New(cfg.RepoPath)` with a loop over `cfg.Repos`
   building the map, then pass the map to `workspace.New()`.
-- [x] Add a `repoAlias` helper on `Manager` that looks up the client for an alias, returning
+- [ ] Add a `repoAlias` helper on `Manager` that looks up the client for an alias, returning
   `ErrUnknownRepo` if not found (add `ErrUnknownRepo` to `internal/workspace/errors.go`).
 
 ### Phase 3 — Store: tag workspaces with their repo
 
-- [x] Add `RepoAlias string` and `RepoPath string` fields to `store.Workspace`
+- [ ] Add `RepoAlias string` and `RepoPath string` fields to `store.Workspace`
   (`internal/store/store.go:27`).
-- [x] Update `workspace.Create()` to populate both fields on the `store.Workspace` it writes.
-- [x] Update `workspaceSummary` in `internal/tools/tools.go:69` to include `repoAlias` and
+- [ ] Update `workspace.Create()` to populate both fields on the `store.Workspace` it writes.
+- [ ] Update `workspaceSummary` in `internal/tools/tools.go:69` to include `repoAlias` and
   `repoPath` in JSON output.
-- [x] Name-conflict check in `workspace.Create()` (currently in `workspace.go:53`) must be
+- [ ] Name-conflict check in `workspace.Create()` (currently in `workspace.go:53`) must be
   scoped to the same `RepoAlias` so two repos can have a workspace named `"feat-x"`.
-- [x] `store.Add()` — update the duplicate-name guard to also compare `RepoAlias`.
+- [ ] `store.Add()` — update the duplicate-name guard to also compare `RepoAlias`.
 
 ### Phase 4 — Tool API: `repo` parameter on `workspace_create`
 
-- [x] Add optional `repo` string parameter to `workspace_create` MCP tool
+- [ ] Add optional `repo` string parameter to `workspace_create` MCP tool
   (`internal/tools/tools.go:151`). Description: "Alias of the repo to create the
   workspace in (defaults to \"default\" if only one repo is configured)".
-- [x] In the tool handler, resolve the alias: if `repo` is empty and there is exactly one
+- [ ] In the tool handler, resolve the alias: if `repo` is empty and there is exactly one
   repo configured, use it; if empty and multiple repos are configured, return an error
   asking the caller to specify.
-- [x] Add `Repo string` field to `workspace.CreateOptions`.
-- [x] In `workspace.Manager.Create()`, use `opts.Repo` to select the right `worktree.Client`
+- [ ] Add `Repo string` field to `workspace.CreateOptions`.
+- [ ] In `workspace.Manager.Create()`, use `opts.Repo` to select the right `worktree.Client`
   and the right `WorktreeRoot` for the worktree path.
-- [x] Update `workspace.Manager.Delete()` — currently calls `git -C m.cfg.RepoPath`
+- [ ] Update `workspace.Manager.Delete()` — currently calls `git -C m.cfg.RepoPath`
   directly (`workspace.go:192`). Replace with a lookup of the workspace's `RepoAlias`
   in `m.worktrees` to get the correct `repoPath`.
 
 ### Phase 5 — `workspace_list` and routing helpers
 
-- [x] Add optional `repo` filter parameter to `workspace_list` tool so callers can list
+- [ ] Add optional `repo` filter parameter to `workspace_list` tool so callers can list
   workspaces for a single repo.
-- [x] `store.List()` currently takes only `includeArchived bool`. Add an optional
+- [ ] `store.List()` currently takes only `includeArchived bool`. Add an optional
   `repoAlias string` filter parameter (empty string = all repos, preserving existing
   behaviour).
-- [x] Update `Manager.List()` to forward the alias filter.
+- [ ] Update `Manager.List()` to forward the alias filter.
 
 ### Phase 6 — `Reconcile` update
 
-- [x] `workspace.Manager.Reconcile()` currently calls `m.tmux.ListSessions(m.cfg.SessionPrefix)`.
+- [ ] `workspace.Manager.Reconcile()` currently calls `m.tmux.ListSessions(m.cfg.SessionPrefix)`.
   The session prefix is global (not per-repo), so reconcile logic is already repo-agnostic.
   Verify this still holds and add a comment noting it.
-- [x] Remove the reference to `m.cfg.RepoPath` if any lingers after Phase 2; run `grep -r
+- [ ] Remove the reference to `m.cfg.RepoPath` if any lingers after Phase 2; run `grep -r
   "cfg.RepoPath" internal/` to confirm it is gone.
 
 ### Phase 7 — Backward compatibility
 
-- [x] Confirm that an existing config file with only `repoPath`/`worktreeRoot` (no `repos`)
+- [ ] Confirm that an existing config file with only `repoPath`/`worktreeRoot` (no `repos`)
   still starts the binary without error (the shim from Phase 1 covers this).
-- [x] Confirm that `HARNESS_REPO_PATH` env var still works (shim should pick it up).
-- [x] Write a `TestLegacyConfigShim` in `internal/config/config_test.go` asserting that
+- [ ] Confirm that `HARNESS_REPO_PATH` env var still works (shim should pick it up).
+- [ ] Write a `TestLegacyConfigShim` in `internal/config/config_test.go` asserting that
   a config with `repoPath: "/some/repo"` produces `cfg.Repos["default"].Path == "/some/repo"`.
-- [x] Keep `Config.RepoPath` and `Config.WorktreeRoot` fields present but mark them
+- [ ] Keep `Config.RepoPath` and `Config.WorktreeRoot` fields present but mark them
   `// Deprecated: use Repos` in a doc comment. Do not remove in this phase.
 
 ### Phase 8 — Integration test
 
-- [x] Add `//go:build integration` test in `internal/workspace/workspace_integration_test.go`
+- [ ] Add `//go:build integration` test in `internal/workspace/workspace_integration_test.go`
   that creates two temp git repos, builds a two-repo config, starts a `Manager`, and
   verifies `workspace_create` with each alias produces a worktree under the correct
   `WorktreeRoot`.
-- [x] Confirm `workspace_list` with a `repo` filter returns only workspaces for that repo.
-- [x] Confirm `workspace_delete` removes the branch from the correct repo.
+- [ ] Confirm `workspace_list` with a `repo` filter returns only workspaces for that repo.
+- [ ] Confirm `workspace_delete` removes the branch from the correct repo.
 
 ### Phase 9 — Docs and MCP config example
 
-- [x] Update `README.md` with a multi-repo `config.json` example showing the `repos` object.
-- [x] Update `mcp-config.example.json` (if it exists at repo root) with the new `repos` key.
-- [x] Document the `HARNESS_REPOS` env var format.
+- [ ] Update `README.md` with a multi-repo `config.json` example showing the `repos` object.
+- [ ] Update `mcp-config.example.json` (if it exists at repo root) with the new `repos` key.
+- [ ] Document the `HARNESS_REPOS` env var format.
 
 ---
 
