@@ -4,7 +4,7 @@ BINARY := hangar
 
 build:
 	go build -o bin/$(BINARY) .
-	go build -o bin/client ./cli
+	go build -o bin/cli ./client
 
 test:
 	go test -race -short ./...
