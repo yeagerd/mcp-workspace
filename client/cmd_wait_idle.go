@@ -29,7 +29,7 @@ func cmdWaitIdle(opts globalOpts, args []string) error {
 	id := fs.Arg(0)
 
 	ctx := context.Background()
-	c, cleanup, err := connect(ctx, opts.binaryPath, opts.configPath)
+	c, cleanup, err := connect(ctx, opts)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "harness-client wait-idle: %v\n", err)
 		return err

@@ -20,7 +20,7 @@ func cmdList(opts globalOpts, args []string) error {
 	}
 
 	ctx := context.Background()
-	c, cleanup, err := connect(ctx, opts.binaryPath, opts.configPath)
+	c, cleanup, err := connect(ctx, opts)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "harness-client list: %v\n", err)
 		return err

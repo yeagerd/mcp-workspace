@@ -17,19 +17,23 @@ import (
 
 // connect spawns tmux-harness as a subprocess and returns an initialized MCP client.
 // cleanup must be called when done to kill the subprocess and release resources.
-func connect(ctx context.Context, binary, configPath string) (*mcpclient.Client, func(), error) {
-	binary, err := resolveBinary(binary)
+func connect(ctx context.Context, opts globalOpts) (*mcpclient.Client, func(), error) {
+	binary, err := resolveBinary(opts.binaryPath)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	args := []string{}
-	if configPath != "" {
-		args = append(args, "--config", configPath)
+	// --config flag takes precedence over .mcp.json args.
+	args := opts.serverArgs
+	if opts.configPath != "" {
+		args = []string{"--config", opts.configPath}
+	}
+	if args == nil {
+		args = []string{}
 	}
 
-	// Strip HARNESS_* env vars so parent-shell config doesn't conflict with
-	// the config file we're passing explicitly.
+	// Strip HARNESS_* env vars so parent-shell config doesn't conflict, then
+	// inject env vars sourced from .mcp.json (e.g. HARNESS_REPO_PATH).
 	cmdFunc := transport.WithCommandFunc(func(
 		fCtx context.Context, command string, env []string, fArgs []string,
 	) (*exec.Cmd, error) {
@@ -41,6 +45,9 @@ func connect(ctx context.Context, binary, configPath string) (*mcpclient.Client,
 			}
 		}
 		cmd.Env = append(filtered, env...)
+		for k, v := range opts.serverEnv {
+			cmd.Env = append(cmd.Env, k+"="+v)
+		}
 		return cmd, nil
 	})
 

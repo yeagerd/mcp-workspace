@@ -52,6 +52,20 @@ func Execute(args []string) error {
 		jsonOut:    jsonOut,
 	}
 
+	// Load .mcp.json from the working directory to pick up server binary,
+	// args, and env (e.g. HARNESS_REPO_PATH) without requiring explicit flags.
+	if cwd, err := os.Getwd(); err == nil {
+		if entry := findProjectMCPConfig(cwd); entry != nil {
+			if opts.binaryPath == "" && entry.Command != "" {
+				opts.binaryPath = entry.Command
+			}
+			if opts.configPath == "" {
+				opts.serverArgs = entry.Args
+			}
+			opts.serverEnv = entry.Env
+		}
+	}
+
 	switch subcommand {
 	case "list":
 		return cmdList(opts, subArgs)
@@ -84,6 +98,8 @@ type globalOpts struct {
 	configPath string
 	binaryPath string
 	jsonOut    bool
+	serverArgs []string          // from .mcp.json
+	serverEnv  map[string]string // from .mcp.json
 }
 
 func printUsage() {

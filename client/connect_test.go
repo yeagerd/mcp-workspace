@@ -11,7 +11,7 @@ import (
 func TestConnect_BinaryNotFound(t *testing.T) {
 	ctx := context.Background()
 	// Use a path that does not exist.
-	c, cleanup, err := connect(ctx, "/nonexistent/path/to/tmux-harness", "")
+	c, cleanup, err := connect(ctx, globalOpts{binaryPath: "/nonexistent/path/to/tmux-harness"})
 	require.Error(t, err)
 	assert.Nil(t, c)
 	assert.Nil(t, cleanup)
