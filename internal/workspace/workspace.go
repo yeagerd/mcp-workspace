@@ -4,11 +4,13 @@ package workspace
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/yeagerd/hangar/internal/config"
@@ -21,6 +23,14 @@ var validName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$|^[a-z0-9]$
 
 var reservedNames = map[string]bool{"new": true, "list": true, "delete": true}
 
+// worktreeClient is the subset of *worktree.Client that Manager requires.
+type worktreeClient interface {
+	Add(worktreePath, branchName string, createBranch bool) error
+	Remove(worktreePath string, force bool) error
+	FindByPath(path string) (worktree.WorktreeInfo, bool)
+	CheckClean(worktreePath, branch string) (dirty bool, unpushed bool, err error)
+}
+
 // CreateOptions holds parameters for creating a workspace.
 type CreateOptions struct {
 	Name   string
@@ -31,13 +41,13 @@ type CreateOptions struct {
 // Manager is the high-level workspace coordinator.
 type Manager struct {
 	tmux     *tmux.Client
-	worktree *worktree.Client
+	worktree worktreeClient
 	store    *store.Store
 	cfg      *config.Config
 }
 
 // New constructs a Manager.
-func New(t *tmux.Client, wt *worktree.Client, s *store.Store, cfg *config.Config) *Manager {
+func New(t *tmux.Client, wt worktreeClient, s *store.Store, cfg *config.Config) *Manager {
 	return &Manager{tmux: t, worktree: wt, store: s, cfg: cfg}
 }
 
@@ -168,9 +178,11 @@ func (m *Manager) Archive(ctx context.Context, id string) (Workspace, error) {
 
 // Delete archives the workspace and also deletes the git branch.
 // confirmed must be true — if false, returns ErrDeleteNotConfirmed without doing anything.
+// If force is false, Delete refuses to proceed when the worktree has uncommitted changes
+// or unpushed commits.
 //
 // WARNING: This is the only operation that deletes a git branch. It cannot be undone.
-func (m *Manager) Delete(ctx context.Context, id string, confirmed bool) error {
+func (m *Manager) Delete(ctx context.Context, id string, confirmed bool, force bool) error {
 	if !confirmed {
 		return ErrDeleteNotConfirmed
 	}
@@ -180,8 +192,26 @@ func (m *Manager) Delete(ctx context.Context, id string, confirmed bool) error {
 		return fmt.Errorf("%w: %s", ErrNotFound, id)
 	}
 
-	// Archive first (exits session, removes worktree).
 	if sw.ArchivedAt == nil {
+		if !force {
+			worktreePath := filepath.Join(m.cfg.WorktreeRoot, sw.Name)
+			dirty, unpushed, checkErr := m.worktree.CheckClean(worktreePath, sw.Branch)
+			if checkErr != nil {
+				return fmt.Errorf("checking workspace cleanliness: %w", checkErr)
+			}
+			if dirty || unpushed {
+				var reasons []string
+				if dirty {
+					reasons = append(reasons, "workspace has uncommitted changes; commit or stash them, or pass force=true to delete anyway")
+				}
+				if unpushed {
+					reasons = append(reasons, "workspace branch has unpushed commits; push them or pass force=true to delete anyway")
+				}
+				return errors.New(strings.Join(reasons, "; "))
+			}
+		}
+
+		// Archive first (exits session, removes worktree).
 		if _, err := m.Archive(ctx, id); err != nil {
 			return fmt.Errorf("archiving before delete: %w", err)
 		}

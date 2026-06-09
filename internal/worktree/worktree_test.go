@@ -2,6 +2,7 @@ package worktree
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"testing"
 
@@ -23,6 +24,45 @@ func (m *mockExecutor) Run(repoPath, name string, args ...string) ([]byte, error
 	m.lastCmd = name
 	m.lastArgs = args
 	return m.out, m.err
+}
+
+// seqExecutor returns responses from a fixed queue, one per call.
+type seqExecutor struct {
+	t         *testing.T
+	responses []struct {
+		out []byte
+		err error
+	}
+	idx int
+}
+
+func (s *seqExecutor) Run(_, _ string, _ ...string) ([]byte, error) {
+	if s.idx >= len(s.responses) {
+		s.t.Fatalf("seqExecutor: unexpected call %d (only %d responses configured)", s.idx+1, len(s.responses))
+	}
+	r := s.responses[s.idx]
+	s.idx++
+	return r.out, r.err
+}
+
+func seqOK(out string) struct {
+	out []byte
+	err error
+} {
+	return struct {
+		out []byte
+		err error
+	}{out: []byte(out)}
+}
+
+func seqErr(msg string) struct {
+	out []byte
+	err error
+} {
+	return struct {
+		out []byte
+		err error
+	}{err: fmt.Errorf("%s", msg)}
 }
 
 // loadFixture reads the porcelain fixture file from the test fixtures directory.
@@ -195,4 +235,74 @@ func TestFindByPath_ListError(t *testing.T) {
 	c := NewWithExecutor("/repo", m)
 	_, ok := c.FindByPath("/any/path")
 	assert.False(t, ok)
+}
+
+func TestCheckClean_Clean(t *testing.T) {
+	seq := &seqExecutor{t: t, responses: []struct {
+		out []byte
+		err error
+	}{seqOK(""), seqOK("")}}
+	c := NewWithExecutor("/repo", seq)
+	dirty, unpushed, err := c.CheckClean("/repo/wt/feat", "feat")
+	require.NoError(t, err)
+	assert.False(t, dirty)
+	assert.False(t, unpushed)
+}
+
+func TestCheckClean_Dirty(t *testing.T) {
+	seq := &seqExecutor{t: t, responses: []struct {
+		out []byte
+		err error
+	}{seqOK(" M file.go\n"), seqOK("")}}
+	c := NewWithExecutor("/repo", seq)
+	dirty, unpushed, err := c.CheckClean("/repo/wt/feat", "feat")
+	require.NoError(t, err)
+	assert.True(t, dirty)
+	assert.False(t, unpushed)
+}
+
+func TestCheckClean_Unpushed(t *testing.T) {
+	seq := &seqExecutor{t: t, responses: []struct {
+		out []byte
+		err error
+	}{seqOK(""), seqOK("abc1234 add feature\n")}}
+	c := NewWithExecutor("/repo", seq)
+	dirty, unpushed, err := c.CheckClean("/repo/wt/feat", "feat")
+	require.NoError(t, err)
+	assert.False(t, dirty)
+	assert.True(t, unpushed)
+}
+
+func TestCheckClean_NoUpstream(t *testing.T) {
+	seq := &seqExecutor{t: t, responses: []struct {
+		out []byte
+		err error
+	}{seqOK(""), seqErr("exit status 128: no upstream configured")}}
+	c := NewWithExecutor("/repo", seq)
+	dirty, unpushed, err := c.CheckClean("/repo/wt/feat", "feat")
+	require.NoError(t, err)
+	assert.False(t, dirty)
+	assert.True(t, unpushed)
+}
+
+func TestCheckClean_BothDirtyAndUnpushed(t *testing.T) {
+	seq := &seqExecutor{t: t, responses: []struct {
+		out []byte
+		err error
+	}{seqOK("M  file.go\n"), seqOK("abc1234 add feature\n")}}
+	c := NewWithExecutor("/repo", seq)
+	dirty, unpushed, err := c.CheckClean("/repo/wt/feat", "feat")
+	require.NoError(t, err)
+	assert.True(t, dirty)
+	assert.True(t, unpushed)
+}
+
+func TestCheckClean_StatusError(t *testing.T) {
+	seq := &seqExecutor{t: t, responses: []struct {
+		out []byte
+		err error
+	}{seqErr("exit status 128: not a git repo")}}
+	c := NewWithExecutor("/repo", seq)
+	_, _, err := c.CheckClean("/repo/wt/feat", "feat")
+	require.Error(t, err)
 }

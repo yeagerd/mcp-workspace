@@ -51,7 +51,7 @@ func (m *mockManager) Archive(_ context.Context, id string) (workspace.Workspace
 	return workspace.Workspace{}, workspace.ErrNotFound
 }
 
-func (m *mockManager) Delete(_ context.Context, id string, confirmed bool) error {
+func (m *mockManager) Delete(_ context.Context, id string, confirmed bool, _ bool) error {
 	if m.deleteErr != nil {
 		return m.deleteErr
 	}
@@ -261,6 +261,18 @@ func TestWorkspaceDelete_NotConfirmed(t *testing.T) {
 	result := callTool(t, s, "workspace_delete", map[string]any{"id": "ws-1", "confirm": false})
 	assert.True(t, result.IsError)
 	assert.Len(t, mgr.workspaces, 1)
+}
+
+func TestWorkspaceDelete_Force(t *testing.T) {
+	mgr := &mockManager{workspaces: []workspace.Workspace{
+		{ID: "ws-1", Name: "myws", Status: workspace.StatusActive},
+	}}
+	s := newTestServer(mgr, &mockPaneCapture{}, &mockStoreUpdater{})
+	result := callTool(t, s, "workspace_delete", map[string]any{
+		"id": "ws-1", "confirm": true, "force": true,
+	})
+	assert.False(t, result.IsError, textContent(t, result))
+	assert.Empty(t, mgr.workspaces)
 }
 
 func TestWorkspaceSend_Happy(t *testing.T) {

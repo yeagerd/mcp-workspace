@@ -103,6 +103,25 @@ func (c *Client) Prune() error {
 	return nil
 }
 
+// CheckClean reports whether the worktree at worktreePath has uncommitted changes
+// (dirty) or local commits not yet pushed to any remote (unpushed).
+// If no upstream is configured the branch is treated as unpushed.
+func (c *Client) CheckClean(worktreePath, branch string) (dirty bool, unpushed bool, err error) {
+	out, err := c.exec.Run(worktreePath, "git", "status", "--porcelain")
+	if err != nil {
+		return false, false, fmt.Errorf("git status --porcelain: %w", err)
+	}
+	dirty = strings.TrimSpace(string(out)) != ""
+
+	out, logErr := c.exec.Run(worktreePath, "git", "log", "@{u}..HEAD", "--oneline")
+	if logErr != nil {
+		// No upstream configured or other error — treat branch as unpushed.
+		return dirty, true, nil
+	}
+	unpushed = strings.TrimSpace(string(out)) != ""
+	return dirty, unpushed, nil
+}
+
 // FindByPath returns the WorktreeInfo whose Path matches path, or false if absent.
 func (c *Client) FindByPath(path string) (WorktreeInfo, bool) {
 	infos, err := c.List()

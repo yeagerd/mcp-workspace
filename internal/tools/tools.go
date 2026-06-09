@@ -23,7 +23,7 @@ import (
 type Manager interface {
 	Create(ctx context.Context, opts workspace.CreateOptions) (workspace.Workspace, error)
 	Archive(ctx context.Context, id string) (workspace.Workspace, error)
-	Delete(ctx context.Context, id string, confirmed bool) error
+	Delete(ctx context.Context, id string, confirmed bool, force bool) error
 	List(includeArchived bool) []workspace.Workspace
 	Get(id string) (workspace.Workspace, error)
 	GetByName(name string) (workspace.Workspace, error)
@@ -242,13 +242,17 @@ func Register(s *server.MCPServer, mgr Manager, capture PaneCapture, storeUpd St
 			mcp.Required(),
 			mcp.Description("Must be true; returns error if false or absent"),
 		),
+		mcp.WithBoolean("force",
+			mcp.Description("Skip dirty/unpushed branch safety check"),
+		),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		id, err := req.RequireString("id")
 		if err != nil {
 			return mcp.NewToolResultError("id is required"), nil
 		}
 		confirm := req.GetBool("confirm", false)
-		if err := mgr.Delete(ctx, id, confirm); err != nil {
+		force := req.GetBool("force", false)
+		if err := mgr.Delete(ctx, id, confirm, force); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		return jsonText(map[string]any{"deleted": true, "id": id})
