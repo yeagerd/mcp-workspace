@@ -78,7 +78,7 @@ func TestIntegration_CreateAndArchive(t *testing.T) {
 	ws, err := m.Create(ctx, CreateOptions{Name: "inttest-basic"})
 	require.NoError(t, err)
 	assert.Equal(t, "inttest-basic", ws.Name)
-	assert.Equal(t, store.StatusActive, ws.Status)
+	assert.Equal(t, StatusActive, ws.Status)
 
 	t.Cleanup(func() {
 		_, _ = m.Archive(ctx, ws.ID)
@@ -92,7 +92,7 @@ func TestIntegration_CreateAndArchive(t *testing.T) {
 	// Archive.
 	archived, err := m.Archive(ctx, ws.ID)
 	require.NoError(t, err)
-	assert.Equal(t, store.StatusArchived, archived.Status)
+	assert.Equal(t, StatusArchived, archived.Status)
 	assert.NotNil(t, archived.ArchivedAt)
 
 	// Session should be gone.
@@ -119,7 +119,7 @@ func TestIntegration_Reconcile(t *testing.T) {
 	// Kill session directly to simulate an orphan.
 	require.NoError(t, m.tmux.KillSession(ws.TmuxSession))
 
-	// Reconcile should mark it as orphaned.
+	// Reconcile should mark it as orphaned in the store (store.Status still exists at this point).
 	require.NoError(t, m.Reconcile(ctx))
 
 	reloaded, err := m.store.Get(ws.ID)

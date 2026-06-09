@@ -19,37 +19,37 @@ import (
 // ---- mocks ----
 
 type mockManager struct {
-	workspaces   []store.Workspace
-	createErr    error
-	archiveErr   error
-	deleteErr    error
-	sendKeysErr  error
-	getErr       error
+	workspaces  []workspace.Workspace
+	createErr   error
+	archiveErr  error
+	deleteErr   error
+	sendKeysErr error
+	getErr      error
 }
 
-func (m *mockManager) Create(_ context.Context, opts workspace.CreateOptions) (store.Workspace, error) {
+func (m *mockManager) Create(_ context.Context, opts workspace.CreateOptions) (workspace.Workspace, error) {
 	if m.createErr != nil {
-		return store.Workspace{}, m.createErr
+		return workspace.Workspace{}, m.createErr
 	}
-	ws := store.Workspace{
+	ws := workspace.Workspace{
 		ID: "ws-1", Name: opts.Name, Branch: opts.Branch,
-		TmuxSession: "harness-" + opts.Name, Status: store.StatusActive, CreatedAt: time.Now(),
+		TmuxSession: "harness-" + opts.Name, Status: workspace.StatusActive, CreatedAt: time.Now(),
 	}
 	m.workspaces = append(m.workspaces, ws)
 	return ws, nil
 }
 
-func (m *mockManager) Archive(_ context.Context, id string) (store.Workspace, error) {
+func (m *mockManager) Archive(_ context.Context, id string) (workspace.Workspace, error) {
 	if m.archiveErr != nil {
-		return store.Workspace{}, m.archiveErr
+		return workspace.Workspace{}, m.archiveErr
 	}
 	for i := range m.workspaces {
 		if m.workspaces[i].ID == id {
-			m.workspaces[i].Status = store.StatusArchived
+			m.workspaces[i].Status = workspace.StatusArchived
 			return m.workspaces[i], nil
 		}
 	}
-	return store.Workspace{}, workspace.ErrNotFound
+	return workspace.Workspace{}, workspace.ErrNotFound
 }
 
 func (m *mockManager) Delete(_ context.Context, id string, confirmed bool) error {
@@ -68,38 +68,38 @@ func (m *mockManager) Delete(_ context.Context, id string, confirmed bool) error
 	return workspace.ErrNotFound
 }
 
-func (m *mockManager) List(includeArchived bool) []store.Workspace {
+func (m *mockManager) List(includeArchived bool) []workspace.Workspace {
 	if includeArchived {
 		return m.workspaces
 	}
-	var out []store.Workspace
+	var out []workspace.Workspace
 	for _, ws := range m.workspaces {
-		if ws.Status == store.StatusActive {
+		if ws.Status == workspace.StatusActive {
 			out = append(out, ws)
 		}
 	}
 	return out
 }
 
-func (m *mockManager) Get(id string) (store.Workspace, error) {
+func (m *mockManager) Get(id string) (workspace.Workspace, error) {
 	if m.getErr != nil {
-		return store.Workspace{}, m.getErr
+		return workspace.Workspace{}, m.getErr
 	}
 	for _, ws := range m.workspaces {
 		if ws.ID == id {
 			return ws, nil
 		}
 	}
-	return store.Workspace{}, workspace.ErrNotFound
+	return workspace.Workspace{}, workspace.ErrNotFound
 }
 
-func (m *mockManager) GetByName(name string) (store.Workspace, error) {
+func (m *mockManager) GetByName(name string) (workspace.Workspace, error) {
 	for _, ws := range m.workspaces {
 		if ws.Name == name {
 			return ws, nil
 		}
 	}
-	return store.Workspace{}, workspace.ErrNotFound
+	return workspace.Workspace{}, workspace.ErrNotFound
 }
 
 func (m *mockManager) SendKeys(_ string, _ string, _ bool) error { return m.sendKeysErr }
@@ -177,9 +177,9 @@ func TestWorkspaceList_Empty(t *testing.T) {
 }
 
 func TestWorkspaceList_IncludeArchived(t *testing.T) {
-	mgr := &mockManager{workspaces: []store.Workspace{
-		{ID: "1", Name: "a", Status: store.StatusActive},
-		{ID: "2", Name: "b", Status: store.StatusArchived},
+	mgr := &mockManager{workspaces: []workspace.Workspace{
+		{ID: "1", Name: "a", Status: workspace.StatusActive},
+		{ID: "2", Name: "b", Status: workspace.StatusArchived},
 	}}
 	s := newTestServer(mgr, &mockPaneCapture{}, &mockStoreUpdater{})
 
@@ -197,13 +197,15 @@ func TestWorkspaceList_IncludeArchived(t *testing.T) {
 func TestWorkspaceList_CheckIdleTrue(t *testing.T) {
 	content := "stable\n"
 	h := paneHash(content)
-	ws := store.Workspace{
-		ID: "ws-1", Name: "myws", Status: store.StatusActive, TmuxSession: "harness-myws",
+	ws := workspace.Workspace{
+		ID: "ws-1", Name: "myws", Status: workspace.StatusActive, TmuxSession: "harness-myws",
 		LastCaptureHash: h, LastChangedAt: time.Now().Add(-10 * time.Second),
 	}
-	mgr := &mockManager{workspaces: []store.Workspace{ws}}
+	mgr := &mockManager{workspaces: []workspace.Workspace{ws}}
 	cap := &mockPaneCapture{content: content}
-	upd := &mockStoreUpdater{data: map[string]store.Workspace{"ws-1": ws}}
+	upd := &mockStoreUpdater{data: map[string]store.Workspace{"ws-1": {
+		ID: "ws-1", LastCaptureHash: h, LastChangedAt: ws.LastChangedAt,
+	}}}
 	s := newTestServer(mgr, cap, upd)
 
 	result := callTool(t, s, "workspace_list", map[string]any{"check_idle": true, "idle_poll_ms": 50})
@@ -222,13 +224,15 @@ func TestWorkspaceList_CheckIdleTrue(t *testing.T) {
 func TestWorkspaceList_CheckIdleFalse(t *testing.T) {
 	content := "stable\n"
 	h := paneHash(content)
-	ws := store.Workspace{
-		ID: "ws-1", Name: "myws", Status: store.StatusActive, TmuxSession: "harness-myws",
+	ws := workspace.Workspace{
+		ID: "ws-1", Name: "myws", Status: workspace.StatusActive, TmuxSession: "harness-myws",
 		LastCaptureHash: h, LastChangedAt: time.Now().Add(-10 * time.Second),
 	}
-	mgr := &mockManager{workspaces: []store.Workspace{ws}}
+	mgr := &mockManager{workspaces: []workspace.Workspace{ws}}
 	cap := &mockPaneCapture{content: content}
-	upd := &mockStoreUpdater{data: map[string]store.Workspace{"ws-1": ws}}
+	upd := &mockStoreUpdater{data: map[string]store.Workspace{"ws-1": {
+		ID: "ws-1", LastCaptureHash: h, LastChangedAt: ws.LastChangedAt,
+	}}}
 	s := newTestServer(mgr, cap, upd)
 
 	result := callTool(t, s, "workspace_list", map[string]any{"check_idle": false})
@@ -245,13 +249,15 @@ func TestWorkspaceList_CheckIdleFalse(t *testing.T) {
 func TestWorkspaceList_IdlePollMsClamp(t *testing.T) {
 	content := "stable\n"
 	h := paneHash(content)
-	ws := store.Workspace{
-		ID: "ws-1", Name: "myws", Status: store.StatusActive, TmuxSession: "harness-myws",
+	ws := workspace.Workspace{
+		ID: "ws-1", Name: "myws", Status: workspace.StatusActive, TmuxSession: "harness-myws",
 		LastCaptureHash: h, LastChangedAt: time.Now().Add(-10 * time.Second),
 	}
-	mgr := &mockManager{workspaces: []store.Workspace{ws}}
+	mgr := &mockManager{workspaces: []workspace.Workspace{ws}}
 	cap := &mockPaneCapture{content: content}
-	upd := &mockStoreUpdater{data: map[string]store.Workspace{"ws-1": ws}}
+	upd := &mockStoreUpdater{data: map[string]store.Workspace{"ws-1": {
+		ID: "ws-1", LastCaptureHash: h, LastChangedAt: ws.LastChangedAt,
+	}}}
 	s := newTestServer(mgr, cap, upd)
 
 	// Below floor (5 → clamped to 50): should succeed and populate idle fields.
@@ -284,13 +290,13 @@ func TestWorkspaceCreate_MissingName(t *testing.T) {
 }
 
 func TestWorkspaceArchive_Happy(t *testing.T) {
-	mgr := &mockManager{workspaces: []store.Workspace{
-		{ID: "ws-1", Name: "myws", Status: store.StatusActive},
+	mgr := &mockManager{workspaces: []workspace.Workspace{
+		{ID: "ws-1", Name: "myws", Status: workspace.StatusActive},
 	}}
 	s := newTestServer(mgr, &mockPaneCapture{}, &mockStoreUpdater{})
 	result := callTool(t, s, "workspace_archive", map[string]any{"id": "ws-1"})
 	assert.False(t, result.IsError, textContent(t, result))
-	assert.Equal(t, store.StatusArchived, mgr.workspaces[0].Status)
+	assert.Equal(t, workspace.StatusArchived, mgr.workspaces[0].Status)
 }
 
 func TestWorkspaceArchive_NotFound(t *testing.T) {
@@ -300,8 +306,8 @@ func TestWorkspaceArchive_NotFound(t *testing.T) {
 }
 
 func TestWorkspaceDelete_Confirmed(t *testing.T) {
-	mgr := &mockManager{workspaces: []store.Workspace{
-		{ID: "ws-1", Name: "myws", Status: store.StatusActive},
+	mgr := &mockManager{workspaces: []workspace.Workspace{
+		{ID: "ws-1", Name: "myws", Status: workspace.StatusActive},
 	}}
 	s := newTestServer(mgr, &mockPaneCapture{}, &mockStoreUpdater{})
 	result := callTool(t, s, "workspace_delete", map[string]any{"id": "ws-1", "confirm": true})
@@ -310,8 +316,8 @@ func TestWorkspaceDelete_Confirmed(t *testing.T) {
 }
 
 func TestWorkspaceDelete_NotConfirmed(t *testing.T) {
-	mgr := &mockManager{workspaces: []store.Workspace{
-		{ID: "ws-1", Name: "myws", Status: store.StatusActive},
+	mgr := &mockManager{workspaces: []workspace.Workspace{
+		{ID: "ws-1", Name: "myws", Status: workspace.StatusActive},
 	}}
 	s := newTestServer(mgr, &mockPaneCapture{}, &mockStoreUpdater{})
 	result := callTool(t, s, "workspace_delete", map[string]any{"id": "ws-1", "confirm": false})
@@ -320,8 +326,8 @@ func TestWorkspaceDelete_NotConfirmed(t *testing.T) {
 }
 
 func TestWorkspaceSend_Happy(t *testing.T) {
-	mgr := &mockManager{workspaces: []store.Workspace{
-		{ID: "ws-1", Name: "myws", Status: store.StatusActive, TmuxSession: "harness-myws"},
+	mgr := &mockManager{workspaces: []workspace.Workspace{
+		{ID: "ws-1", Name: "myws", Status: workspace.StatusActive, TmuxSession: "harness-myws"},
 	}}
 	s := newTestServer(mgr, &mockPaneCapture{}, &mockStoreUpdater{})
 	result := callTool(t, s, "workspace_send", map[string]any{"id": "ws-1", "text": "hello"})
@@ -329,8 +335,8 @@ func TestWorkspaceSend_Happy(t *testing.T) {
 }
 
 func TestWorkspaceSend_ControlChars(t *testing.T) {
-	mgr := &mockManager{workspaces: []store.Workspace{
-		{ID: "ws-1", Name: "myws", Status: store.StatusActive},
+	mgr := &mockManager{workspaces: []workspace.Workspace{
+		{ID: "ws-1", Name: "myws", Status: workspace.StatusActive},
 	}}
 	s := newTestServer(mgr, &mockPaneCapture{}, &mockStoreUpdater{})
 	result := callTool(t, s, "workspace_send", map[string]any{"id": "ws-1", "text": "hello\x01world"})
@@ -338,8 +344,8 @@ func TestWorkspaceSend_ControlChars(t *testing.T) {
 }
 
 func TestWorkspaceSend_NotActive(t *testing.T) {
-	mgr := &mockManager{workspaces: []store.Workspace{
-		{ID: "ws-1", Name: "myws", Status: store.StatusArchived},
+	mgr := &mockManager{workspaces: []workspace.Workspace{
+		{ID: "ws-1", Name: "myws", Status: workspace.StatusArchived},
 	}}
 	s := newTestServer(mgr, &mockPaneCapture{}, &mockStoreUpdater{})
 	result := callTool(t, s, "workspace_send", map[string]any{"id": "ws-1", "text": "hello"})
@@ -347,8 +353,8 @@ func TestWorkspaceSend_NotActive(t *testing.T) {
 }
 
 func TestWorkspaceRead_Happy(t *testing.T) {
-	mgr := &mockManager{workspaces: []store.Workspace{
-		{ID: "ws-1", Name: "myws", Status: store.StatusActive, TmuxSession: "harness-myws"},
+	mgr := &mockManager{workspaces: []workspace.Workspace{
+		{ID: "ws-1", Name: "myws", Status: workspace.StatusActive, TmuxSession: "harness-myws"},
 	}}
 	cap := &mockPaneCapture{content: "line1\nline2\n"}
 	s := newTestServer(mgr, cap, &mockStoreUpdater{})
@@ -363,13 +369,17 @@ func TestWorkspaceRead_Happy(t *testing.T) {
 func TestWorkspaceIdle_Idle(t *testing.T) {
 	content := "stable\n"
 	h := paneHash(content)
-	ws := store.Workspace{
-		ID: "ws-1", Name: "myws", Status: store.StatusActive, TmuxSession: "harness-myws",
+	ws := workspace.Workspace{
+		ID: "ws-1", Name: "myws", Status: workspace.StatusActive, TmuxSession: "harness-myws",
 		LastCaptureHash: h, LastChangedAt: time.Now().Add(-10 * time.Second),
 	}
-	mgr := &mockManager{workspaces: []store.Workspace{ws}}
+	// mockStoreUpdater still uses store.Workspace until Task 7 changes the idle API.
+	wsStore := store.Workspace{
+		ID: "ws-1", LastCaptureHash: h, LastChangedAt: ws.LastChangedAt,
+	}
+	mgr := &mockManager{workspaces: []workspace.Workspace{ws}}
 	cap := &mockPaneCapture{content: content}
-	upd := &mockStoreUpdater{data: map[string]store.Workspace{"ws-1": ws}}
+	upd := &mockStoreUpdater{data: map[string]store.Workspace{"ws-1": wsStore}}
 	s := newTestServer(mgr, cap, upd)
 
 	result := callTool(t, s, "workspace_idle", map[string]any{"id": "ws-1"})
@@ -380,8 +390,8 @@ func TestWorkspaceIdle_Idle(t *testing.T) {
 }
 
 func TestWorkspaceAttachHint(t *testing.T) {
-	mgr := &mockManager{workspaces: []store.Workspace{
-		{ID: "ws-1", Name: "myws", Status: store.StatusActive, TmuxSession: "harness-myws"},
+	mgr := &mockManager{workspaces: []workspace.Workspace{
+		{ID: "ws-1", Name: "myws", Status: workspace.StatusActive, TmuxSession: "harness-myws"},
 	}}
 	s := newTestServer(mgr, &mockPaneCapture{}, &mockStoreUpdater{})
 	result := callTool(t, s, "workspace_attach_hint", map[string]any{"id": "ws-1"})
@@ -394,13 +404,16 @@ func TestWorkspaceAttachHint(t *testing.T) {
 func TestWorkspaceWaitIdle_AlreadyIdle(t *testing.T) {
 	content := "stable\n"
 	h := paneHash(content)
-	ws := store.Workspace{
-		ID: "ws-1", Name: "myws", Status: store.StatusActive, TmuxSession: "harness-myws",
+	ws := workspace.Workspace{
+		ID: "ws-1", Name: "myws", Status: workspace.StatusActive, TmuxSession: "harness-myws",
 		LastCaptureHash: h, LastChangedAt: time.Now().Add(-10 * time.Second),
 	}
-	mgr := &mockManager{workspaces: []store.Workspace{ws}}
+	wsStore := store.Workspace{
+		ID: "ws-1", LastCaptureHash: h, LastChangedAt: ws.LastChangedAt,
+	}
+	mgr := &mockManager{workspaces: []workspace.Workspace{ws}}
 	cap := &mockPaneCapture{content: content}
-	upd := &mockStoreUpdater{data: map[string]store.Workspace{"ws-1": ws}}
+	upd := &mockStoreUpdater{data: map[string]store.Workspace{"ws-1": wsStore}}
 	s := newTestServer(mgr, cap, upd)
 
 	result := callTool(t, s, "workspace_wait_idle", map[string]any{
@@ -419,8 +432,8 @@ func TestWorkspaceWaitIdle_Timeout(t *testing.T) {
 	// Content always changes → never idle.
 	call := 0
 
-	ws := store.Workspace{
-		ID: "ws-1", Name: "myws", Status: store.StatusActive, TmuxSession: "harness-myws",
+	ws := workspace.Workspace{
+		ID: "ws-1", Name: "myws", Status: workspace.StatusActive, TmuxSession: "harness-myws",
 	}
 
 	// Build a capture that returns distinct content each call.
@@ -429,14 +442,14 @@ func TestWorkspaceWaitIdle_Timeout(t *testing.T) {
 		return fmt.Sprintf("line %d\n", call)
 	}}
 
-	mgr := &mockManager{workspaces: []store.Workspace{ws}}
-	upd := &mockStoreUpdater{data: map[string]store.Workspace{"ws-1": ws}}
+	mgr := &mockManager{workspaces: []workspace.Workspace{ws}}
+	upd := &mockStoreUpdater{data: map[string]store.Workspace{"ws-1": {}}}
 	s := newTestServer(mgr, capFunc, upd)
 
 	result := callTool(t, s, "workspace_wait_idle", map[string]any{
-		"id":              "ws-1",
-		"timeout_ms":      150,
-		"threshold_ms":    200,
+		"id":               "ws-1",
+		"timeout_ms":       150,
+		"threshold_ms":     200,
 		"poll_interval_ms": 40,
 	})
 	assert.False(t, result.IsError, textContent(t, result))
@@ -453,8 +466,8 @@ func TestWorkspaceWaitIdle_NotFound(t *testing.T) {
 }
 
 func TestWorkspaceWaitIdle_NotActive(t *testing.T) {
-	mgr := &mockManager{workspaces: []store.Workspace{
-		{ID: "ws-1", Name: "myws", Status: store.StatusArchived},
+	mgr := &mockManager{workspaces: []workspace.Workspace{
+		{ID: "ws-1", Name: "myws", Status: workspace.StatusArchived},
 	}}
 	s := newTestServer(mgr, &mockPaneCapture{}, &mockStoreUpdater{})
 	result := callTool(t, s, "workspace_wait_idle", map[string]any{"id": "ws-1"})
@@ -475,14 +488,16 @@ func (f *funcCapture) CapturePane(_ string, _ int) (string, error) {
 func TestCheckIdleAll_AlreadyIdle(t *testing.T) {
 	content := "stable\n"
 	h := paneHash(content)
-	ws := store.Workspace{
-		ID: "ws-1", Name: "myws", Status: store.StatusActive, TmuxSession: "harness-myws",
+	ws := workspace.Workspace{
+		ID: "ws-1", Name: "myws", Status: workspace.StatusActive, TmuxSession: "harness-myws",
 		LastCaptureHash: h, LastChangedAt: time.Now().Add(-10 * time.Second),
 	}
 	cap := &mockPaneCapture{content: content}
-	upd := &mockStoreUpdater{data: map[string]store.Workspace{"ws-1": ws}}
+	upd := &mockStoreUpdater{data: map[string]store.Workspace{"ws-1": {
+		ID: "ws-1", LastCaptureHash: h, LastChangedAt: ws.LastChangedAt,
+	}}}
 
-	result := checkIdleAll(context.Background(), []store.Workspace{ws}, cap, upd, 5000, 50)
+	result := checkIdleAll(context.Background(), []workspace.Workspace{ws}, cap, upd, 5000, 50)
 
 	require.Contains(t, result, "ws-1")
 	assert.True(t, result["ws-1"].Idle)
@@ -490,16 +505,16 @@ func TestCheckIdleAll_AlreadyIdle(t *testing.T) {
 
 func TestCheckIdleAll_Busy(t *testing.T) {
 	call := 0
-	ws := store.Workspace{
-		ID: "ws-1", Name: "myws", Status: store.StatusActive, TmuxSession: "harness-myws",
+	ws := workspace.Workspace{
+		ID: "ws-1", Name: "myws", Status: workspace.StatusActive, TmuxSession: "harness-myws",
 	}
 	cap := &funcCapture{fn: func() string {
 		call++
 		return fmt.Sprintf("line %d\n", call)
 	}}
-	upd := &mockStoreUpdater{data: map[string]store.Workspace{"ws-1": ws}}
+	upd := &mockStoreUpdater{data: map[string]store.Workspace{"ws-1": {ID: "ws-1"}}}
 
-	result := checkIdleAll(context.Background(), []store.Workspace{ws}, cap, upd, 5000, 50)
+	result := checkIdleAll(context.Background(), []workspace.Workspace{ws}, cap, upd, 5000, 50)
 
 	require.Contains(t, result, "ws-1")
 	assert.False(t, result["ws-1"].Idle)
@@ -512,8 +527,8 @@ func TestCheckIdleAll_Empty(t *testing.T) {
 
 func TestSanitizeText(t *testing.T) {
 	tests := []struct {
-		input    string
-		wantBad  bool
+		input   string
+		wantBad bool
 	}{
 		{"hello world", false},
 		{"hello\nworld", false},

@@ -22,12 +22,12 @@ import (
 
 // Manager is the interface the tool handlers use to access workspace operations.
 type Manager interface {
-	Create(ctx context.Context, opts workspace.CreateOptions) (store.Workspace, error)
-	Archive(ctx context.Context, id string) (store.Workspace, error)
+	Create(ctx context.Context, opts workspace.CreateOptions) (workspace.Workspace, error)
+	Archive(ctx context.Context, id string) (workspace.Workspace, error)
 	Delete(ctx context.Context, id string, confirmed bool) error
-	List(includeArchived bool) []store.Workspace
-	Get(id string) (store.Workspace, error)
-	GetByName(name string) (store.Workspace, error)
+	List(includeArchived bool) []workspace.Workspace
+	Get(id string) (workspace.Workspace, error)
+	GetByName(name string) (workspace.Workspace, error)
 	SendKeys(id string, text string, pressEnter bool) error
 }
 
@@ -69,13 +69,13 @@ func (r *rateLimiter) check(id string) (retryAfterMs int64, ok bool) {
 
 // workspaceSummary is the JSON shape for list output.
 type workspaceSummary struct {
-	ID           string                `json:"id"`
-	Name         string                `json:"name"`
-	Status       store.WorkspaceStatus `json:"status"`
-	Branch       string                `json:"branch"`
-	TmuxSession  string                `json:"tmuxSession"`
-	CreatedAt    time.Time             `json:"createdAt"`
-	WorktreePath string                `json:"worktreePath"`
+	ID           string                    `json:"id"`
+	Name         string                    `json:"name"`
+	Status       workspace.WorkspaceStatus `json:"status"`
+	Branch       string                    `json:"branch"`
+	TmuxSession  string                    `json:"tmuxSession"`
+	CreatedAt    time.Time                 `json:"createdAt"`
+	WorktreePath string                    `json:"worktreePath"`
 	// Idle fields are populated only for active workspaces when check_idle=true.
 	IdleStatus    *bool      `json:"idleStatus,omitempty"`
 	LastChangedAt *time.Time `json:"lastChangedAt,omitempty"`
@@ -83,7 +83,7 @@ type workspaceSummary struct {
 	ThresholdMs   *int64     `json:"thresholdMs,omitempty"`
 }
 
-func toSummary(ws store.Workspace) workspaceSummary {
+func toSummary(ws workspace.Workspace) workspaceSummary {
 	return workspaceSummary{
 		ID:           ws.ID,
 		Name:         ws.Name,
@@ -101,7 +101,7 @@ func toSummary(ws store.Workspace) workspaceSummary {
 // the result (caller treats absent key as non-idle).
 func checkIdleAll(
 	ctx context.Context,
-	workspaces []store.Workspace,
+	workspaces []workspace.Workspace,
 	capture PaneCapture,
 	updater StoreUpdater,
 	thresholdMs, pollMs int64,
@@ -116,14 +116,19 @@ func checkIdleAll(
 		err    error
 	}
 
-	fanOut := func(wss []store.Workspace) map[string]idle.IdleStatus {
+	fanOut := func(wss []workspace.Workspace) map[string]idle.IdleStatus {
 		ch := make(chan result, len(wss))
 		var wg sync.WaitGroup
 		for _, ws := range wss {
 			wg.Add(1)
-			go func(w store.Workspace) {
+			go func(w workspace.Workspace) {
 				defer wg.Done()
-				s, err := idle.Check(ctx, w, capture, updater, thresholdMs)
+				// Bridge to store.Workspace until idle package is updated in Task 7.
+				swIdle := store.Workspace{
+					ID: w.ID, Name: w.Name, TmuxSession: w.TmuxSession,
+					LastCaptureHash: w.LastCaptureHash, LastChangedAt: w.LastChangedAt,
+				}
+				s, err := idle.Check(ctx, swIdle, capture, updater, thresholdMs)
 				ch <- result{id: w.ID, status: s, err: err}
 			}(ws)
 		}
@@ -143,15 +148,17 @@ func checkIdleAll(
 	// First pass.
 	fanOut(workspaces)
 
-	// Re-fetch workspace state so the second pass uses updated LastCaptureHash/LastChangedAt.
-	refreshed := make([]store.Workspace, 0, len(workspaces))
+	// Re-fetch idle state so the second pass uses updated LastCaptureHash/LastChangedAt.
+	refreshed := make([]workspace.Workspace, 0, len(workspaces))
 	for _, ws := range workspaces {
 		updated, err := updater.Get(ws.ID)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "checkIdleAll: re-fetch error for %s: %v; using stale state\n", ws.ID, err)
 			refreshed = append(refreshed, ws)
 		} else {
-			refreshed = append(refreshed, updated)
+			ws.LastCaptureHash = updated.LastCaptureHash
+			ws.LastChangedAt = updated.LastChangedAt
+			refreshed = append(refreshed, ws)
 		}
 	}
 
@@ -237,9 +244,9 @@ func Register(s *server.MCPServer, mgr Manager, capture PaneCapture, storeUpd St
 
 		workspaces := mgr.List(includeArchived)
 
-		var active []store.Workspace
+		var active []workspace.Workspace
 		for _, ws := range workspaces {
-			if ws.Status == store.StatusActive {
+			if ws.Status == workspace.StatusActive {
 				active = append(active, ws)
 			}
 		}
@@ -376,7 +383,7 @@ func Register(s *server.MCPServer, mgr Manager, capture PaneCapture, storeUpd St
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("workspace not found: %s", id)), nil
 		}
-		if ws.Status != store.StatusActive {
+		if ws.Status != workspace.StatusActive {
 			return mcp.NewToolResultError(
 				fmt.Sprintf("workspace %s is not active (status: %s)", id, ws.Status),
 			), nil
@@ -471,7 +478,12 @@ func Register(s *server.MCPServer, mgr Manager, capture PaneCapture, storeUpd St
 			return mcp.NewToolResultError(fmt.Sprintf("workspace not found: %s", id)), nil
 		}
 
-		status, err := idle.Check(ctx, ws, capture, storeUpd, threshold)
+		// Bridge to store.Workspace until idle package is updated in a later task.
+		swIdle := store.Workspace{
+			ID: ws.ID, Name: ws.Name, TmuxSession: ws.TmuxSession,
+			LastCaptureHash: ws.LastCaptureHash, LastChangedAt: ws.LastChangedAt,
+		}
+		status, err := idle.Check(ctx, swIdle, capture, storeUpd, threshold)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "workspace_idle: check error: %v\n", err)
 			return mcp.NewToolResultError(fmt.Sprintf("idle check failed: %v", err)), nil
@@ -514,13 +526,18 @@ func Register(s *server.MCPServer, mgr Manager, capture PaneCapture, storeUpd St
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("workspace not found: %s", id)), nil
 		}
-		if ws.Status != store.StatusActive {
+		if ws.Status != workspace.StatusActive {
 			return mcp.NewToolResultError(
 				fmt.Sprintf("workspace %s is not active (status: %s)", id, ws.Status),
 			), nil
 		}
 
-		status, waitErr := idle.WaitUntilIdle(ctx, ws, capture, storeUpd, threshold, int64(timeoutMs), int64(pollIntervalMs))
+		// Bridge to store.Workspace until idle package is updated in a later task.
+		swIdle := store.Workspace{
+			ID: ws.ID, Name: ws.Name, TmuxSession: ws.TmuxSession,
+			LastCaptureHash: ws.LastCaptureHash, LastChangedAt: ws.LastChangedAt,
+		}
+		status, waitErr := idle.WaitUntilIdle(ctx, swIdle, capture, storeUpd, threshold, int64(timeoutMs), int64(pollIntervalMs))
 		timedOut := waitErr != nil
 		if waitErr != nil && !errors.Is(waitErr, context.DeadlineExceeded) && !errors.Is(waitErr, context.Canceled) {
 			fmt.Fprintf(os.Stderr, "workspace_wait_idle: error: %v\n", waitErr)
