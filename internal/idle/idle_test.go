@@ -156,6 +156,104 @@ func TestCheckWithPromptHeuristic_TiebreakerBusy(t *testing.T) {
 	assert.False(t, status.Idle)
 }
 
+// captureEntry is the per-session result used by multiCapture.
+type captureEntry struct {
+	content string
+	err     error
+}
+
+// multiCapture returns per-session content or error.
+type multiCapture struct {
+	results map[string]captureEntry
+}
+
+func (m *multiCapture) CapturePane(session string, _ int) (string, error) {
+	if r, ok := m.results[session]; ok {
+		return r.content, r.err
+	}
+	return "", nil
+}
+
+func TestIsIdle_Empty(t *testing.T) {
+	result := IsIdle(context.Background(), nil, &mockCapture{}, &mockUpdater{}, 5000, 50)
+	assert.Empty(t, result)
+}
+
+func TestIsIdle_AlreadyIdle(t *testing.T) {
+	content := "stable\n"
+	h := hashContent(content)
+	ws := WorkspaceState{
+		ID: "ws-1", Name: "myws", TmuxSession: "s1",
+		LastCaptureHash: h, LastChangedAt: time.Now().Add(-10 * time.Second),
+	}
+	cap := &mockCapture{content: content}
+	upd := &mockUpdater{}
+
+	result := IsIdle(context.Background(), []WorkspaceState{ws}, cap, upd, 5000, 50)
+
+	require.Contains(t, result, "ws-1")
+	assert.True(t, result["ws-1"].Idle)
+}
+
+func TestIsIdle_Busy(t *testing.T) {
+	ws := WorkspaceState{ID: "ws-1", Name: "myws", TmuxSession: "s1"}
+	cap := &toggleCapture{toggle: [2]string{"a\n", "b\n"}, stableN: 1000}
+	upd := &mockUpdater{}
+
+	result := IsIdle(context.Background(), []WorkspaceState{ws}, cap, upd, 5000, 50)
+
+	require.Contains(t, result, "ws-1")
+	assert.False(t, result["ws-1"].Idle)
+}
+
+func TestIsIdle_ErrorOmitted(t *testing.T) {
+	content := "stable\n"
+	h := hashContent(content)
+	ws1 := WorkspaceState{
+		ID: "ws-1", Name: "good", TmuxSession: "s1",
+		LastCaptureHash: h, LastChangedAt: time.Now().Add(-10 * time.Second),
+	}
+	ws2 := WorkspaceState{ID: "ws-2", Name: "bad", TmuxSession: "s2"}
+
+	cap := &multiCapture{results: map[string]captureEntry{
+		"s1": {content: content},
+		"s2": {err: assert.AnError},
+	}}
+	upd := &mockUpdater{}
+
+	result := IsIdle(context.Background(), []WorkspaceState{ws1, ws2}, cap, upd, 5000, 50)
+
+	require.Contains(t, result, "ws-1")
+	assert.True(t, result["ws-1"].Idle)
+	assert.NotContains(t, result, "ws-2")
+}
+
+func TestIsIdle_MultipleWorkspaces(t *testing.T) {
+	idleContent := "stable\n"
+	idleHash := hashContent(idleContent)
+
+	wsIdle := WorkspaceState{
+		ID: "idle", Name: "idle", TmuxSession: "s-idle",
+		LastCaptureHash: idleHash, LastChangedAt: time.Now().Add(-10 * time.Second),
+	}
+	// wsBusy has no prior hash; first pass records its hash, second pass sees the same
+	// content but LastChangedAt was just set → elapsed < threshold → not idle.
+	wsBusy := WorkspaceState{ID: "busy", Name: "busy", TmuxSession: "s-busy"}
+
+	cap := &multiCapture{results: map[string]captureEntry{
+		"s-idle": {content: idleContent},
+		"s-busy": {content: "active output\n"},
+	}}
+	upd := &mockUpdater{}
+
+	result := IsIdle(context.Background(), []WorkspaceState{wsIdle, wsBusy}, cap, upd, 5000, 50)
+
+	require.Contains(t, result, "idle")
+	assert.True(t, result["idle"].Idle)
+	require.Contains(t, result, "busy")
+	assert.False(t, result["busy"].Idle)
+}
+
 // toggleCapture returns alternating content on each call, then a fixed stable string.
 type toggleCapture struct {
 	calls   int

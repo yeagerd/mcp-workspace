@@ -6,7 +6,9 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"os"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -140,6 +142,105 @@ func WaitUntilIdle(
 			}
 		}
 	}
+}
+
+// trackingUpdater wraps a WorkspaceUpdater and records the most recent hash/time per workspace ID
+// so IsIdle can refresh workspace state between the two passes.
+type trackingUpdater struct {
+	inner     WorkspaceUpdater
+	mu        sync.Mutex
+	hashes    map[string]string
+	changedAt map[string]time.Time
+}
+
+func newTrackingUpdater(inner WorkspaceUpdater) *trackingUpdater {
+	return &trackingUpdater{
+		inner:     inner,
+		hashes:    make(map[string]string),
+		changedAt: make(map[string]time.Time),
+	}
+}
+
+func (t *trackingUpdater) UpdateIdleState(id, hash string, changedAt time.Time) error {
+	t.mu.Lock()
+	t.hashes[id] = hash
+	t.changedAt[id] = changedAt
+	t.mu.Unlock()
+	return t.inner.UpdateIdleState(id, hash, changedAt)
+}
+
+// IsIdle runs two concurrent idle-check passes on all workspaces, separated by pollMs.
+// pollMs ≤ 0 defaults to 500 ms.
+// Returns map[workspaceID]IdleStatus. Per-workspace errors are logged to stderr and that
+// workspace is omitted from the result map.
+func IsIdle(
+	ctx context.Context,
+	workspaces []WorkspaceState,
+	capture PaneCapture,
+	updater WorkspaceUpdater,
+	thresholdMs int64,
+	pollMs int64,
+) map[string]IdleStatus {
+	if len(workspaces) == 0 {
+		return map[string]IdleStatus{}
+	}
+	if pollMs <= 0 {
+		pollMs = 500
+	}
+
+	tracker := newTrackingUpdater(updater)
+
+	type checkResult struct {
+		id     string
+		status IdleStatus
+		err    error
+	}
+
+	fanOut := func(wss []WorkspaceState) map[string]IdleStatus {
+		ch := make(chan checkResult, len(wss))
+		var wg sync.WaitGroup
+		for _, ws := range wss {
+			wg.Add(1)
+			go func(w WorkspaceState) {
+				defer wg.Done()
+				s, err := Check(ctx, w, capture, tracker, thresholdMs)
+				ch <- checkResult{id: w.ID, status: s, err: err}
+			}(ws)
+		}
+		wg.Wait()
+		close(ch)
+		out := make(map[string]IdleStatus, len(wss))
+		for r := range ch {
+			if r.err != nil {
+				fmt.Fprintf(os.Stderr, "IsIdle: check error for %s: %v\n", r.id, r.err)
+				continue
+			}
+			out[r.id] = r.status
+		}
+		return out
+	}
+
+	// First pass: seed tracker with the current pane hashes.
+	fanOut(workspaces)
+
+	// Refresh workspace states using hashes captured by the first pass so the
+	// second pass correctly detects stability rather than re-treating a changed
+	// hash as a new change.
+	refreshed := make([]WorkspaceState, len(workspaces))
+	copy(refreshed, workspaces)
+	tracker.mu.Lock()
+	for i := range refreshed {
+		if h, ok := tracker.hashes[refreshed[i].ID]; ok {
+			refreshed[i].LastCaptureHash = h
+			refreshed[i].LastChangedAt = tracker.changedAt[refreshed[i].ID]
+		}
+	}
+	tracker.mu.Unlock()
+
+	time.Sleep(time.Duration(pollMs) * time.Millisecond)
+
+	// Second pass — return these results.
+	return fanOut(refreshed)
 }
 
 // hashContent returns a hex SHA-256 of the pane content.
