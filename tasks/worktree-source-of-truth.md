@@ -11,7 +11,7 @@
 
 ## Checklist
 
-- [ ] **1. Add `workspace.WorkspaceStatus` and `workspace.Workspace` combined type** — Create `internal/workspace/types.go` with `type WorkspaceStatus string` and constants `StatusActive`, `StatusOrphaned`, `StatusArchived`; and `type Workspace struct` containing all fields: `ID`, `Name`, `WorktreePath`, `TmuxSession`, `Branch`, `Status`, `CreatedAt`, `ArchivedAt`, `LastCaptureHash`, `LastChangedAt`, `Meta`. This is purely additive; no existing code changes. The type will become the return type for all Manager methods in a later task.
+- [x] **1. Add `workspace.WorkspaceStatus` and `workspace.Workspace` combined type** — Create `internal/workspace/types.go` with `type WorkspaceStatus string` and constants `StatusActive`, `StatusOrphaned`, `StatusArchived`; and `type Workspace struct` containing all fields: `ID`, `Name`, `WorktreePath`, `TmuxSession`, `Branch`, `Status`, `CreatedAt`, `ArchivedAt`, `LastCaptureHash`, `LastChangedAt`, `Meta`. This is purely additive; no existing code changes. The type will become the return type for all Manager methods in a later task.
 
 - [ ] **2. Add `worktree.FindByPath(path string) (WorktreeInfo, bool)` to `internal/worktree/worktree.go`** — Implement as a method on `*Client` that calls `c.List()` and returns the first `WorktreeInfo` whose `Path == path`, or `false` if absent. Add a table-driven unit test in `internal/worktree/worktree_test.go` covering the found and not-found cases using a fake `Executor` that returns the existing fixture output from `test/fixtures/worktree_list_porcelain.txt`. This is additive.
 
