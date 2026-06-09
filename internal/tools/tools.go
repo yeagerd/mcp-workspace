@@ -218,12 +218,51 @@ func Register(s *server.MCPServer, mgr Manager, capture PaneCapture, storeUpd St
 		mcp.WithBoolean("include_archived",
 			mcp.Description("Include archived and orphaned workspaces"),
 		),
-	), func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		mcp.WithBoolean("check_idle",
+			mcp.Description("Check idle status for each active workspace (default true)"),
+		),
+		mcp.WithNumber("idle_poll_ms",
+			mcp.Description("Milliseconds to wait between the two idle-check passes (default 500, min 50, max 30000)"),
+		),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		includeArchived := req.GetBool("include_archived", false)
+		checkIdle := req.GetBool("check_idle", true)
+		pollMs := req.GetFloat("idle_poll_ms", 500)
+		if pollMs < 50 {
+			pollMs = 50
+		}
+		if pollMs > 30000 {
+			pollMs = 30000
+		}
+
 		workspaces := mgr.List(includeArchived)
+
+		var active []store.Workspace
+		for _, ws := range workspaces {
+			if ws.Status == store.StatusActive {
+				active = append(active, ws)
+			}
+		}
+
+		var idleMap map[string]idle.IdleStatus
+		if checkIdle {
+			idleMap = checkIdleAll(ctx, active, capture, storeUpd, defaultThresholdMs, int64(pollMs))
+		}
+
 		summaries := make([]workspaceSummary, len(workspaces))
 		for i, ws := range workspaces {
-			summaries[i] = toSummary(ws)
+			s := toSummary(ws)
+			if is, ok := idleMap[ws.ID]; ok {
+				idleStatus := is.Idle
+				lastChanged := is.LastChangedAt
+				elapsed := is.ElapsedMs
+				threshold := is.ThresholdMs
+				s.IdleStatus = &idleStatus
+				s.LastChangedAt = &lastChanged
+				s.ElapsedMs = &elapsed
+				s.ThresholdMs = &threshold
+			}
+			summaries[i] = s
 		}
 		return jsonText(summaries)
 	})
