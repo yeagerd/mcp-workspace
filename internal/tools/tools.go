@@ -26,7 +26,7 @@ type Manager interface {
 	Delete(ctx context.Context, id string, confirmed bool, force bool) error
 	List(includeArchived bool) []workspace.Workspace
 	Get(id string) (workspace.Workspace, error)
-	GetByName(name string) (workspace.Workspace, error)
+	Resolve(input string) (workspace.Workspace, error)
 	SendKeys(id string, text string, pressEnter bool) error
 }
 
@@ -217,14 +217,18 @@ func Register(s *server.MCPServer, mgr Manager, capture PaneCapture, storeUpd St
 		mcp.WithDescription("Gracefully shut down a workspace. Quits Claude Code, removes the worktree, retains the git branch."),
 		mcp.WithString("id",
 			mcp.Required(),
-			mcp.Description("Workspace ID"),
+			mcp.Description("Workspace ID, name, or unique prefix of either"),
 		),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		id, err := req.RequireString("id")
 		if err != nil {
 			return mcp.NewToolResultError("id is required"), nil
 		}
-		ws, err := mgr.Archive(ctx, id)
+		resolved, err := mgr.Resolve(id)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		ws, err := mgr.Archive(ctx, resolved.ID)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -236,7 +240,7 @@ func Register(s *server.MCPServer, mgr Manager, capture PaneCapture, storeUpd St
 		mcp.WithDescription("Permanently delete a workspace and its git branch. Destructive and irreversible."),
 		mcp.WithString("id",
 			mcp.Required(),
-			mcp.Description("Workspace ID"),
+			mcp.Description("Workspace ID, name, or unique prefix of either"),
 		),
 		mcp.WithBoolean("confirm",
 			mcp.Required(),
@@ -252,10 +256,14 @@ func Register(s *server.MCPServer, mgr Manager, capture PaneCapture, storeUpd St
 		}
 		confirm := req.GetBool("confirm", false)
 		force := req.GetBool("force", false)
-		if err := mgr.Delete(ctx, id, confirm, force); err != nil {
+		resolved, err := mgr.Resolve(id)
+		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		return jsonText(map[string]any{"deleted": true, "id": id})
+		if err := mgr.Delete(ctx, resolved.ID, confirm, force); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return jsonText(map[string]any{"deleted": true, "id": resolved.ID})
 	})
 
 	// workspace_send
@@ -263,7 +271,7 @@ func Register(s *server.MCPServer, mgr Manager, capture PaneCapture, storeUpd St
 		mcp.WithDescription("Send text (a prompt or command) to the Claude Code session in a workspace."),
 		mcp.WithString("id",
 			mcp.Required(),
-			mcp.Description("Workspace ID"),
+			mcp.Description("Workspace ID, name, or unique prefix of either"),
 		),
 		mcp.WithString("text",
 			mcp.Required(),
@@ -284,7 +292,7 @@ func Register(s *server.MCPServer, mgr Manager, capture PaneCapture, storeUpd St
 		}
 		pressEnter := req.GetBool("press_enter", true)
 
-		ws, err := mgr.Get(id)
+		ws, err := mgr.Resolve(id)
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("workspace not found: %s", id)), nil
 		}
@@ -302,14 +310,14 @@ func Register(s *server.MCPServer, mgr Manager, capture PaneCapture, storeUpd St
 		}
 
 		// Rate limiting: max one send per workspace per 200 ms.
-		retryAfterMs, ok := rl.check(id)
+		retryAfterMs, ok := rl.check(ws.ID)
 		if !ok {
 			return mcp.NewToolResultError(
 				fmt.Sprintf(`{"error":"rate limited","retry_after_ms":%d}`, retryAfterMs),
 			), nil
 		}
 
-		if err := mgr.SendKeys(id, text, pressEnter); err != nil {
+		if err := mgr.SendKeys(ws.ID, text, pressEnter); err != nil {
 			fmt.Fprintf(os.Stderr, "workspace_send: error: %v\n", err)
 			return mcp.NewToolResultError(fmt.Sprintf("send failed: %v", err)), nil
 		}
@@ -322,7 +330,7 @@ func Register(s *server.MCPServer, mgr Manager, capture PaneCapture, storeUpd St
 		mcp.WithDescription("Capture recent terminal output from a workspace's tmux pane."),
 		mcp.WithString("id",
 			mcp.Required(),
-			mcp.Description("Workspace ID"),
+			mcp.Description("Workspace ID, name, or unique prefix of either"),
 		),
 		mcp.WithNumber("lines",
 			mcp.Description("Number of lines to capture (default 200, max 2000)"),
@@ -340,7 +348,7 @@ func Register(s *server.MCPServer, mgr Manager, capture PaneCapture, storeUpd St
 			lines = 2000
 		}
 
-		ws, err := mgr.Get(id)
+		ws, err := mgr.Resolve(id)
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("workspace not found: %s", id)), nil
 		}
@@ -363,7 +371,7 @@ func Register(s *server.MCPServer, mgr Manager, capture PaneCapture, storeUpd St
 			"Polls pane output internally; returns the same shape as workspace_idle plus a timed_out flag."),
 		mcp.WithString("id",
 			mcp.Required(),
-			mcp.Description("Workspace ID"),
+			mcp.Description("Workspace ID, name, or unique prefix of either"),
 		),
 		mcp.WithNumber("timeout_ms",
 			mcp.Description("Maximum time to wait in milliseconds (default 600000 = 10 min)"),
@@ -387,7 +395,7 @@ func Register(s *server.MCPServer, mgr Manager, capture PaneCapture, storeUpd St
 		}
 		pollIntervalMs := req.GetFloat("poll_interval_ms", 500)
 
-		ws, err := mgr.Get(id)
+		ws, err := mgr.Resolve(id)
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("workspace not found: %s", id)), nil
 		}
@@ -422,14 +430,14 @@ func Register(s *server.MCPServer, mgr Manager, capture PaneCapture, storeUpd St
 		mcp.WithDescription("Return the shell command a human should run to attach to this workspace's tmux session."),
 		mcp.WithString("id",
 			mcp.Required(),
-			mcp.Description("Workspace ID"),
+			mcp.Description("Workspace ID, name, or unique prefix of either"),
 		),
 	), func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		id, err := req.RequireString("id")
 		if err != nil {
 			return mcp.NewToolResultError("id is required"), nil
 		}
-		ws, err := mgr.Get(id)
+		ws, err := mgr.Resolve(id)
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("workspace not found: %s", id)), nil
 		}

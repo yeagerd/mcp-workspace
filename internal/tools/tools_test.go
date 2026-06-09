@@ -5,14 +5,15 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/yeagerd/hangar/internal/workspace"
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/yeagerd/hangar/internal/workspace"
 )
 
 // ---- mocks ----
@@ -92,13 +93,30 @@ func (m *mockManager) Get(id string) (workspace.Workspace, error) {
 	return workspace.Workspace{}, workspace.ErrNotFound
 }
 
-func (m *mockManager) GetByName(name string) (workspace.Workspace, error) {
+func (m *mockManager) Resolve(input string) (workspace.Workspace, error) {
+	// Exact ID or name first.
 	for _, ws := range m.workspaces {
-		if ws.Name == name {
+		if ws.ID == input || ws.Name == input {
 			return ws, nil
 		}
 	}
-	return workspace.Workspace{}, workspace.ErrNotFound
+	// Prefix match.
+	var matches []workspace.Workspace
+	seen := make(map[string]bool)
+	for _, ws := range m.workspaces {
+		if !seen[ws.ID] && (strings.HasPrefix(ws.ID, input) || strings.HasPrefix(ws.Name, input)) {
+			matches = append(matches, ws)
+			seen[ws.ID] = true
+		}
+	}
+	switch len(matches) {
+	case 0:
+		return workspace.Workspace{}, workspace.ErrNotFound
+	case 1:
+		return matches[0], nil
+	default:
+		return workspace.Workspace{}, fmt.Errorf("%w: %q matches multiple workspaces", workspace.ErrAmbiguous, input)
+	}
 }
 
 func (m *mockManager) SendKeys(_ string, _ string, _ bool) error { return m.sendKeysErr }
