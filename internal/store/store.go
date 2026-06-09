@@ -171,6 +171,14 @@ func (s *Store) Delete(id string) error {
 	return fmt.Errorf("%w: id=%s", ErrNotFound, id)
 }
 
+// UpdateIdleState updates the LastCaptureHash and LastChangedAt fields for idle detection.
+func (s *Store) UpdateIdleState(id, hash string, changedAt time.Time) error {
+	return s.Update(id, func(w *Workspace) {
+		w.LastCaptureHash = hash
+		w.LastChangedAt = changedAt
+	})
+}
+
 // flush writes the current data to a temp file then renames it atomically over the target.
 // Must be called with s.mu already held.
 func (s *Store) flush() error {
