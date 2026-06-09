@@ -21,7 +21,7 @@ import (
 
 var (
 	binaryPath = flag.String("binary", "./hangar", "path to the hangar binary")
-	repoPath   = flag.String("repo", "", "git repo path for the harness (required)")
+	repoPath   = flag.String("repo", "", "git repo path for the harness (auto-detected if omitted)")
 	configPath = flag.String("config", "", "optional config file path")
 )
 
@@ -91,19 +91,18 @@ func logf(format string, args ...any) {
 func main() {
 	flag.Parse()
 
-	if *repoPath == "" {
-		fmt.Fprintln(os.Stderr, "usage: smoke --binary ./hangar --repo /path/to/repo")
-		os.Exit(1)
-	}
-
 	// Build the arguments for the harness.
 	harnessArgs := []string{}
 	if *configPath != "" {
 		harnessArgs = append(harnessArgs, "--config", *configPath)
 	}
 
-	// Set the repo path via env so we don't need a config file.
-	env := append(os.Environ(), "HARNESS_REPO_PATH="+*repoPath)
+	// Inject HARNESS_REPO_PATH only when explicitly provided; otherwise the
+	// server auto-detects via git rev-parse --show-toplevel.
+	env := os.Environ()
+	if *repoPath != "" {
+		env = append(env, "HARNESS_REPO_PATH="+*repoPath)
+	}
 
 	logf("starting harness: %s %v", *binaryPath, harnessArgs)
 	cmd := exec.Command(*binaryPath, harnessArgs...) //nolint:gosec
