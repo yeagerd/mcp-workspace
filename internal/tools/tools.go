@@ -74,11 +74,8 @@ type workspaceSummary struct {
 	TmuxSession  string                    `json:"tmuxSession"`
 	CreatedAt    time.Time                 `json:"createdAt"`
 	WorktreePath string                    `json:"worktreePath"`
-	// Idle fields are populated only for active workspaces when check_idle=true.
-	IdleStatus    *bool      `json:"idleStatus,omitempty"`
-	LastChangedAt *time.Time `json:"lastChangedAt,omitempty"`
-	ElapsedMs     *int64     `json:"elapsedMs,omitempty"`
-	ThresholdMs   *int64     `json:"thresholdMs,omitempty"`
+	// Idle status is populated for active workspaces.
+	IdleStatus *bool `json:"idleStatus,omitempty"`
 }
 
 func toSummary(ws workspace.Workspace) workspaceSummary {
@@ -91,77 +88,6 @@ func toSummary(ws workspace.Workspace) workspaceSummary {
 		CreatedAt:    ws.CreatedAt,
 		WorktreePath: ws.WorktreePath,
 	}
-}
-
-// checkIdleAll runs idle.Check on all workspaces concurrently, waits pollMs, then runs a
-// second round concurrently using refreshed workspace state, and returns a map of workspace
-// ID → final IdleStatus. Per-workspace errors are logged to stderr; the key is omitted from
-// the result (caller treats absent key as non-idle).
-func checkIdleAll(
-	ctx context.Context,
-	workspaces []workspace.Workspace,
-	capture PaneCapture,
-	updater StoreUpdater,
-	getWS func(string) (workspace.Workspace, error),
-	thresholdMs, pollMs int64,
-) map[string]idle.IdleStatus {
-	if len(workspaces) == 0 {
-		return map[string]idle.IdleStatus{}
-	}
-
-	type result struct {
-		id     string
-		status idle.IdleStatus
-		err    error
-	}
-
-	fanOut := func(wss []workspace.Workspace) map[string]idle.IdleStatus {
-		ch := make(chan result, len(wss))
-		var wg sync.WaitGroup
-		for _, ws := range wss {
-			wg.Add(1)
-			go func(w workspace.Workspace) {
-				defer wg.Done()
-				wsState := idle.WorkspaceState{
-					ID: w.ID, Name: w.Name, TmuxSession: w.TmuxSession,
-					LastCaptureHash: w.LastCaptureHash, LastChangedAt: w.LastChangedAt,
-				}
-				s, err := idle.Check(ctx, wsState, capture, updater, thresholdMs)
-				ch <- result{id: w.ID, status: s, err: err}
-			}(ws)
-		}
-		wg.Wait()
-		close(ch)
-		out := make(map[string]idle.IdleStatus, len(wss))
-		for r := range ch {
-			if r.err != nil {
-				fmt.Fprintf(os.Stderr, "checkIdleAll: idle.Check error for %s: %v\n", r.id, r.err)
-				continue
-			}
-			out[r.id] = r.status
-		}
-		return out
-	}
-
-	// First pass.
-	fanOut(workspaces)
-
-	// Re-fetch workspace state so the second pass uses updated LastCaptureHash/LastChangedAt.
-	refreshed := make([]workspace.Workspace, 0, len(workspaces))
-	for _, ws := range workspaces {
-		updated, err := getWS(ws.ID)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "checkIdleAll: re-fetch error for %s: %v; using stale state\n", ws.ID, err)
-			refreshed = append(refreshed, ws)
-		} else {
-			refreshed = append(refreshed, updated)
-		}
-	}
-
-	time.Sleep(time.Duration(pollMs) * time.Millisecond)
-
-	// Second pass — return these results.
-	return fanOut(refreshed)
 }
 
 // waitIdleResult is the JSON shape returned by workspace_wait_idle.
@@ -221,49 +147,28 @@ func Register(s *server.MCPServer, mgr Manager, capture PaneCapture, storeUpd St
 		mcp.WithBoolean("include_archived",
 			mcp.Description("Include archived and orphaned workspaces"),
 		),
-		mcp.WithBoolean("check_idle",
-			mcp.Description("Check idle status for each active workspace (default true)"),
-		),
-		mcp.WithNumber("idle_poll_ms",
-			mcp.Description("Milliseconds to wait between the two idle-check passes (default 500, min 50, max 30000)"),
-		),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		includeArchived := req.GetBool("include_archived", false)
-		checkIdle := req.GetBool("check_idle", true)
-		pollMs := req.GetFloat("idle_poll_ms", 500)
-		if pollMs < 50 {
-			pollMs = 50
-		}
-		if pollMs > 30000 {
-			pollMs = 30000
-		}
-
 		workspaces := mgr.List(includeArchived)
 
-		var active []workspace.Workspace
+		wsStates := make([]idle.WorkspaceState, 0, len(workspaces))
 		for _, ws := range workspaces {
 			if ws.Status == workspace.StatusActive {
-				active = append(active, ws)
+				wsStates = append(wsStates, idle.WorkspaceState{
+					ID: ws.ID, Name: ws.Name, TmuxSession: ws.TmuxSession,
+					LastCaptureHash: ws.LastCaptureHash, LastChangedAt: ws.LastChangedAt,
+				})
 			}
 		}
 
-		var idleMap map[string]idle.IdleStatus
-		if checkIdle {
-			idleMap = checkIdleAll(ctx, active, capture, storeUpd, mgr.Get, defaultThresholdMs, int64(pollMs))
-		}
+		idleMap := idle.IsIdle(ctx, wsStates, capture, storeUpd, defaultThresholdMs, 0)
 
 		summaries := make([]workspaceSummary, len(workspaces))
 		for i, ws := range workspaces {
 			s := toSummary(ws)
 			if is, ok := idleMap[ws.ID]; ok {
 				idleStatus := is.Idle
-				lastChanged := is.LastChangedAt
-				elapsed := is.ElapsedMs
-				threshold := is.ThresholdMs
 				s.IdleStatus = &idleStatus
-				s.LastChangedAt = &lastChanged
-				s.ElapsedMs = &elapsed
-				s.ThresholdMs = &threshold
 			}
 			summaries[i] = s
 		}
@@ -446,45 +351,6 @@ func Register(s *server.MCPServer, mgr Manager, capture PaneCapture, storeUpd St
 			"content":     content,
 			"captured_at": time.Now().UTC().Format(time.RFC3339),
 		})
-	})
-
-	// workspace_idle
-	s.AddTool(mcp.NewTool("workspace_idle",
-		mcp.WithDescription("Check whether a workspace is busy or idle based on pane output change detection."),
-		mcp.WithString("id",
-			mcp.Required(),
-			mcp.Description("Workspace ID"),
-		),
-		mcp.WithNumber("threshold_ms",
-			mcp.Description("Override the configured idle threshold in milliseconds"),
-		),
-	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		id, err := req.RequireString("id")
-		if err != nil {
-			return mcp.NewToolResultError("id is required"), nil
-		}
-
-		threshold := defaultThresholdMs
-		if v := req.GetFloat("threshold_ms", 0); v > 0 {
-			threshold = int64(v)
-		}
-
-		ws, err := mgr.Get(id)
-		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("workspace not found: %s", id)), nil
-		}
-
-		wsState := idle.WorkspaceState{
-			ID: ws.ID, Name: ws.Name, TmuxSession: ws.TmuxSession,
-			LastCaptureHash: ws.LastCaptureHash, LastChangedAt: ws.LastChangedAt,
-		}
-		status, err := idle.Check(ctx, wsState, capture, storeUpd, threshold)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "workspace_idle: check error: %v\n", err)
-			return mcp.NewToolResultError(fmt.Sprintf("idle check failed: %v", err)), nil
-		}
-
-		return jsonText(status)
 	})
 
 	// workspace_wait_idle

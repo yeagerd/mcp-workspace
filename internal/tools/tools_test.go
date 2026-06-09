@@ -189,7 +189,7 @@ func TestWorkspaceList_IncludeArchived(t *testing.T) {
 	assert.Len(t, all, 2)
 }
 
-func TestWorkspaceList_CheckIdleTrue(t *testing.T) {
+func TestWorkspaceList_AlwaysChecksIdle(t *testing.T) {
 	content := "stable\n"
 	h := paneHash(content)
 	ws := workspace.Workspace{
@@ -201,7 +201,8 @@ func TestWorkspaceList_CheckIdleTrue(t *testing.T) {
 	upd := &mockStoreUpdater{}
 	s := newTestServer(mgr, cap, upd)
 
-	result := callTool(t, s, "workspace_list", map[string]any{"check_idle": true, "idle_poll_ms": 50})
+	// No check_idle flag needed — idle status is always populated for active workspaces.
+	result := callTool(t, s, "workspace_list", nil)
 	assert.False(t, result.IsError, textContent(t, result))
 
 	var summaries []workspaceSummary
@@ -209,58 +210,6 @@ func TestWorkspaceList_CheckIdleTrue(t *testing.T) {
 	require.Len(t, summaries, 1)
 	require.NotNil(t, summaries[0].IdleStatus)
 	assert.True(t, *summaries[0].IdleStatus)
-	assert.NotNil(t, summaries[0].LastChangedAt)
-	assert.NotNil(t, summaries[0].ElapsedMs)
-	assert.NotNil(t, summaries[0].ThresholdMs)
-}
-
-func TestWorkspaceList_CheckIdleFalse(t *testing.T) {
-	content := "stable\n"
-	h := paneHash(content)
-	ws := workspace.Workspace{
-		ID: "ws-1", Name: "myws", Status: workspace.StatusActive, TmuxSession: "harness-myws",
-		LastCaptureHash: h, LastChangedAt: time.Now().Add(-10 * time.Second),
-	}
-	mgr := &mockManager{workspaces: []workspace.Workspace{ws}}
-	cap := &mockPaneCapture{content: content}
-	upd := &mockStoreUpdater{}
-	s := newTestServer(mgr, cap, upd)
-
-	result := callTool(t, s, "workspace_list", map[string]any{"check_idle": false})
-	assert.False(t, result.IsError, textContent(t, result))
-
-	var summaries []workspaceSummary
-	require.NoError(t, json.Unmarshal([]byte(textContent(t, result)), &summaries))
-	require.Len(t, summaries, 1)
-	assert.Nil(t, summaries[0].IdleStatus)
-	assert.Nil(t, summaries[0].ElapsedMs)
-	assert.Nil(t, summaries[0].ThresholdMs)
-}
-
-func TestWorkspaceList_IdlePollMsClamp(t *testing.T) {
-	content := "stable\n"
-	h := paneHash(content)
-	ws := workspace.Workspace{
-		ID: "ws-1", Name: "myws", Status: workspace.StatusActive, TmuxSession: "harness-myws",
-		LastCaptureHash: h, LastChangedAt: time.Now().Add(-10 * time.Second),
-	}
-	mgr := &mockManager{workspaces: []workspace.Workspace{ws}}
-	cap := &mockPaneCapture{content: content}
-	upd := &mockStoreUpdater{}
-	s := newTestServer(mgr, cap, upd)
-
-	// Below floor (5 → clamped to 50): should succeed and populate idle fields.
-	r1 := callTool(t, s, "workspace_list", map[string]any{"check_idle": true, "idle_poll_ms": 5})
-	assert.False(t, r1.IsError, textContent(t, r1))
-	var s1 []workspaceSummary
-	require.NoError(t, json.Unmarshal([]byte(textContent(t, r1)), &s1))
-	require.Len(t, s1, 1)
-	assert.NotNil(t, s1[0].IdleStatus)
-
-	// Above ceiling (99999 → clamped to 30000): would time out the test if not clamped.
-	// We skip the real call here to avoid a 30s wait; the clamp is covered by unit-level
-	// inspection of the handler code. Instead verify the floor clamp result above is enough.
-	_ = upd // already verified above
 }
 
 func TestWorkspaceCreate_Happy(t *testing.T) {
@@ -355,25 +304,6 @@ func TestWorkspaceRead_Happy(t *testing.T) {
 	assert.NotEmpty(t, out["captured_at"])
 }
 
-func TestWorkspaceIdle_Idle(t *testing.T) {
-	content := "stable\n"
-	h := paneHash(content)
-	ws := workspace.Workspace{
-		ID: "ws-1", Name: "myws", Status: workspace.StatusActive, TmuxSession: "harness-myws",
-		LastCaptureHash: h, LastChangedAt: time.Now().Add(-10 * time.Second),
-	}
-	mgr := &mockManager{workspaces: []workspace.Workspace{ws}}
-	cap := &mockPaneCapture{content: content}
-	upd := &mockStoreUpdater{}
-	s := newTestServer(mgr, cap, upd)
-
-	result := callTool(t, s, "workspace_idle", map[string]any{"id": "ws-1"})
-	assert.False(t, result.IsError, textContent(t, result))
-	var out map[string]any
-	require.NoError(t, json.Unmarshal([]byte(textContent(t, result)), &out))
-	assert.True(t, out["Idle"].(bool))
-}
-
 func TestWorkspaceAttachHint(t *testing.T) {
 	mgr := &mockManager{workspaces: []workspace.Workspace{
 		{ID: "ws-1", Name: "myws", Status: workspace.StatusActive, TmuxSession: "harness-myws"},
@@ -463,49 +393,6 @@ type funcCapture struct {
 
 func (f *funcCapture) CapturePane(_ string, _ int) (string, error) {
 	return f.fn(), nil
-}
-
-// ---- checkIdleAll tests ----
-
-func TestCheckIdleAll_AlreadyIdle(t *testing.T) {
-	content := "stable\n"
-	h := paneHash(content)
-	ws := workspace.Workspace{
-		ID: "ws-1", Name: "myws", Status: workspace.StatusActive, TmuxSession: "harness-myws",
-		LastCaptureHash: h, LastChangedAt: time.Now().Add(-10 * time.Second),
-	}
-	cap := &mockPaneCapture{content: content}
-	upd := &mockStoreUpdater{}
-	getWS := func(id string) (workspace.Workspace, error) { return ws, nil }
-
-	result := checkIdleAll(context.Background(), []workspace.Workspace{ws}, cap, upd, getWS, 5000, 50)
-
-	require.Contains(t, result, "ws-1")
-	assert.True(t, result["ws-1"].Idle)
-}
-
-func TestCheckIdleAll_Busy(t *testing.T) {
-	call := 0
-	ws := workspace.Workspace{
-		ID: "ws-1", Name: "myws", Status: workspace.StatusActive, TmuxSession: "harness-myws",
-	}
-	cap := &funcCapture{fn: func() string {
-		call++
-		return fmt.Sprintf("line %d\n", call)
-	}}
-	upd := &mockStoreUpdater{}
-	getWS := func(id string) (workspace.Workspace, error) { return ws, nil }
-
-	result := checkIdleAll(context.Background(), []workspace.Workspace{ws}, cap, upd, getWS, 5000, 50)
-
-	require.Contains(t, result, "ws-1")
-	assert.False(t, result["ws-1"].Idle)
-}
-
-func TestCheckIdleAll_Empty(t *testing.T) {
-	getWS := func(id string) (workspace.Workspace, error) { return workspace.Workspace{}, nil }
-	result := checkIdleAll(context.Background(), nil, &mockPaneCapture{}, &mockStoreUpdater{}, getWS, 5000, 50)
-	assert.Empty(t, result)
 }
 
 func TestSanitizeText(t *testing.T) {
