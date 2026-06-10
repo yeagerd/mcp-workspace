@@ -21,7 +21,7 @@ import (
 // Manager is the interface the tool handlers use to access workspace operations.
 type Manager interface {
 	Create(ctx context.Context, opts workspace.CreateOptions) (workspace.Workspace, error)
-	Delete(ctx context.Context, id string, confirmed bool, force bool) error
+	Delete(ctx context.Context, id string, confirmed bool, force bool, deleteBranch bool) error
 	List() []workspace.Workspace
 	Get(id string) (workspace.Workspace, error)
 	Resolve(input string) (workspace.Workspace, error)
@@ -242,7 +242,7 @@ func Register(s *server.MCPServer, mgr Manager, capture PaneCapture, storeUpd St
 
 	// workspace_delete
 	s.AddTool(mcp.NewTool("workspace_delete",
-		mcp.WithDescription("Permanently delete a workspace and its git branch. Destructive and irreversible."),
+		mcp.WithDescription("Permanently delete a workspace. The git branch is preserved by default."),
 		mcp.WithString("id",
 			mcp.Required(),
 			mcp.Description("Workspace ID, name, or unique prefix of either"),
@@ -254,6 +254,9 @@ func Register(s *server.MCPServer, mgr Manager, capture PaneCapture, storeUpd St
 		mcp.WithBoolean("force",
 			mcp.Description("Skip dirty/unpushed branch safety check"),
 		),
+		mcp.WithBoolean("delete_branch",
+			mcp.Description("Also delete the git branch after removing the worktree (default false; branch is preserved for PRs/review)"),
+		),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		id, err := req.RequireString("id")
 		if err != nil {
@@ -261,11 +264,12 @@ func Register(s *server.MCPServer, mgr Manager, capture PaneCapture, storeUpd St
 		}
 		confirm := req.GetBool("confirm", false)
 		force := req.GetBool("force", false)
+		deleteBranch := req.GetBool("delete_branch", false)
 		resolved, err := mgr.Resolve(id)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		if err := mgr.Delete(ctx, resolved.ID, confirm, force); err != nil {
+		if err := mgr.Delete(ctx, resolved.ID, confirm, force, deleteBranch); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		return jsonText(map[string]any{"deleted": true, "id": resolved.ID})

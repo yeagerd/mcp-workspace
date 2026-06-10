@@ -59,7 +59,7 @@ func addWS(t *testing.T, m *Manager, name, branch string) string {
 func TestDelete_NotConfirmed(t *testing.T) {
 	m := makeDeleteManager(t, &mockWorktree{})
 	id := addWS(t, m, "ws1", "ws1")
-	err := m.Delete(context.Background(), id, false, false)
+	err := m.Delete(context.Background(), id, false, false, false)
 	assert.ErrorIs(t, err, ErrDeleteNotConfirmed)
 }
 
@@ -67,7 +67,7 @@ func TestDelete_DirtyWorktree(t *testing.T) {
 	wt := &mockWorktree{dirty: true}
 	m := makeDeleteManager(t, wt)
 	id := addWS(t, m, "ws1", "ws1")
-	err := m.Delete(context.Background(), id, true, false)
+	err := m.Delete(context.Background(), id, true, false, false)
 	require.Error(t, err)
 	assert.True(t, strings.Contains(err.Error(), "uncommitted changes"), "got: %s", err)
 	assert.False(t, strings.Contains(err.Error(), "unpushed commits"), "got: %s", err)
@@ -77,7 +77,7 @@ func TestDelete_UnpushedCommits(t *testing.T) {
 	wt := &mockWorktree{unpushed: true}
 	m := makeDeleteManager(t, wt)
 	id := addWS(t, m, "ws1", "ws1")
-	err := m.Delete(context.Background(), id, true, false)
+	err := m.Delete(context.Background(), id, true, false, false)
 	require.Error(t, err)
 	assert.True(t, strings.Contains(err.Error(), "unpushed commits"), "got: %s", err)
 	assert.False(t, strings.Contains(err.Error(), "uncommitted changes"), "got: %s", err)
@@ -87,7 +87,7 @@ func TestDelete_BothDirtyAndUnpushed(t *testing.T) {
 	wt := &mockWorktree{dirty: true, unpushed: true}
 	m := makeDeleteManager(t, wt)
 	id := addWS(t, m, "ws1", "ws1")
-	err := m.Delete(context.Background(), id, true, false)
+	err := m.Delete(context.Background(), id, true, false, false)
 	require.Error(t, err)
 	assert.True(t, strings.Contains(err.Error(), "uncommitted changes"), "got: %s", err)
 	assert.True(t, strings.Contains(err.Error(), "unpushed commits"), "got: %s", err)
@@ -99,7 +99,7 @@ func TestDelete_ForceSkipsSafetyCheck(t *testing.T) {
 	wt := &mockWorktree{dirty: true, unpushed: true}
 	m := makeDeleteManager(t, wt)
 	id := addWS(t, m, "ws1", "ws1")
-	err := m.Delete(context.Background(), id, true, true)
+	err := m.Delete(context.Background(), id, true, true, false)
 	if err != nil {
 		assert.False(t, strings.Contains(err.Error(), "uncommitted changes"), "got safety-check error with force=true: %s", err)
 		assert.False(t, strings.Contains(err.Error(), "unpushed commits"), "got safety-check error with force=true: %s", err)

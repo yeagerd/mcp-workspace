@@ -38,7 +38,7 @@ func (m *mockManager) Create(_ context.Context, opts workspace.CreateOptions) (w
 	return ws, nil
 }
 
-func (m *mockManager) Delete(_ context.Context, id string, confirmed bool, _ bool) error {
+func (m *mockManager) Delete(_ context.Context, id string, confirmed bool, _ bool, _ bool) error {
 	if m.deleteErr != nil {
 		return m.deleteErr
 	}

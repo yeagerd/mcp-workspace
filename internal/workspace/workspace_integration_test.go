@@ -81,7 +81,7 @@ func TestIntegration_CreateAndDelete(t *testing.T) {
 	assert.NotEmpty(t, ws.TmuxSession)
 
 	t.Cleanup(func() {
-		_ = m.Delete(ctx, ws.ID, true)
+		_ = m.Delete(ctx, ws.ID, true, false, false)
 	})
 
 	// Session should exist.
@@ -90,7 +90,7 @@ func TestIntegration_CreateAndDelete(t *testing.T) {
 	assert.True(t, exists)
 
 	// Delete.
-	require.NoError(t, m.Delete(ctx, ws.ID, true))
+	require.NoError(t, m.Delete(ctx, ws.ID, true, false, false))
 
 	// Session should be gone.
 	exists, err = m.tmux.SessionExists(m.cfg.SessionPrefix, "inttest-basic")
@@ -114,7 +114,7 @@ func TestIntegration_Reconcile(t *testing.T) {
 
 	t.Cleanup(func() {
 		_ = m.tmux.KillSession(ws.TmuxSession)
-		_ = m.Delete(ctx, ws.ID, true)
+		_ = m.Delete(ctx, ws.ID, true, false, false)
 	})
 
 	// Kill session directly to simulate a missing session.
