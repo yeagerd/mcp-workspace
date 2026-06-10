@@ -126,7 +126,7 @@ func (u *mockStoreUpdater) UpdateIdleState(id, hash string, _ time.Time) error {
 
 func newTestServer(mgr Manager, cap PaneCapture, upd StoreUpdater) *mcpserver.MCPServer {
 	s := mcpserver.NewMCPServer("test", "0.1.0", mcpserver.WithToolCapabilities(true))
-	Register(s, mgr, cap, upd, 50)
+	Register(s, mgr, cap, upd, 50, 10)
 	return s
 }
 
@@ -161,9 +161,11 @@ func TestWorkspaceList_Empty(t *testing.T) {
 	s := newTestServer(&mockManager{}, &mockPaneCapture{}, &mockStoreUpdater{})
 	result := callTool(t, s, "workspace_list", nil)
 	assert.False(t, result.IsError)
-	var list []any
-	require.NoError(t, json.Unmarshal([]byte(textContent(t, result)), &list))
-	assert.Empty(t, list)
+	var out listResult
+	require.NoError(t, json.Unmarshal([]byte(textContent(t, result)), &out))
+	assert.Equal(t, 10, out.MaxWorkspaces)
+	assert.Equal(t, 0, out.ActiveCount)
+	assert.Empty(t, out.Workspaces)
 }
 
 func TestWorkspaceList_AlwaysChecksIdle(t *testing.T) {
@@ -181,11 +183,13 @@ func TestWorkspaceList_AlwaysChecksIdle(t *testing.T) {
 	result := callTool(t, s, "workspace_list", nil)
 	assert.False(t, result.IsError, textContent(t, result))
 
-	var summaries []workspaceSummary
-	require.NoError(t, json.Unmarshal([]byte(textContent(t, result)), &summaries))
-	require.Len(t, summaries, 1)
-	require.NotNil(t, summaries[0].IdleStatus)
-	assert.True(t, *summaries[0].IdleStatus)
+	var out listResult
+	require.NoError(t, json.Unmarshal([]byte(textContent(t, result)), &out))
+	assert.Equal(t, 10, out.MaxWorkspaces)
+	assert.Equal(t, 1, out.ActiveCount)
+	require.Len(t, out.Workspaces, 1)
+	require.NotNil(t, out.Workspaces[0].IdleStatus)
+	assert.True(t, *out.Workspaces[0].IdleStatus)
 }
 
 func TestWorkspaceList_WaitAnyIdle(t *testing.T) {
@@ -205,7 +209,7 @@ func TestWorkspaceList_WaitAnyIdle(t *testing.T) {
 		"timeout_ms":    5000,
 	})
 	assert.False(t, result.IsError, textContent(t, result))
-	var out listWaitResult
+	var out listResult
 	require.NoError(t, json.Unmarshal([]byte(textContent(t, result)), &out))
 	assert.False(t, out.TimedOut)
 	require.Len(t, out.Workspaces, 1)
@@ -231,7 +235,7 @@ func TestWorkspaceList_WaitAllIdle_Timeout(t *testing.T) {
 		"timeout_ms":    150,
 	})
 	assert.False(t, result.IsError, textContent(t, result))
-	var out listWaitResult
+	var out listResult
 	require.NoError(t, json.Unmarshal([]byte(textContent(t, result)), &out))
 	assert.True(t, out.TimedOut)
 	require.Len(t, out.Workspaces, 1)

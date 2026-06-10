@@ -150,7 +150,16 @@ List all workspaces.
 
 `wait_any_idle` and `wait_all_idle` are mutually exclusive.
 
-**Output:** JSON array: `[{id, name, branch, tmuxSession, worktreePath, idle}]`
+**Output:** JSON envelope:
+```json
+{
+  "max_workspaces": 10,
+  "active_count": 3,
+  "timed_out": false,
+  "workspaces": [{id, name, branch, tmuxSession, worktreePath, idleStatus}]
+}
+```
+`timed_out` is only `true` when a wait flag is set and the timeout fires before the condition is met.
 
 ---
 

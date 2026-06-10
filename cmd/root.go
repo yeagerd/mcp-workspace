@@ -74,7 +74,7 @@ func run(configPath string) error {
 		server.WithResourceCapabilities(true, false),
 		server.WithRecovery(),
 	)
-	tools.Register(mcpServer, mgr, tmuxClient, s, int64(cfg.IdleThresholdMs))
+	tools.Register(mcpServer, mgr, tmuxClient, s, int64(cfg.IdleThresholdMs), cfg.MaxWorkspaces)
 
 	// Graceful shutdown: on SIGINT/SIGTERM, give in-flight operations up to 5 s
 	// then hard-exit. Active tmux sessions and worktrees are intentionally left intact.
