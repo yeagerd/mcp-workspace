@@ -201,7 +201,7 @@ func TestWorkspaceList_WaitAnyIdle(t *testing.T) {
 	s := newTestServer(mgr, cap, upd)
 
 	result := callTool(t, s, "workspace_list", map[string]any{
-		"wait_any_idle": true,
+		"wait_for_idle": "any",
 		"timeout_ms":    5000,
 	})
 	assert.False(t, result.IsError, textContent(t, result))
@@ -227,7 +227,7 @@ func TestWorkspaceList_WaitAllIdle_Timeout(t *testing.T) {
 	s := newTestServer(mgr, capFunc, upd)
 
 	result := callTool(t, s, "workspace_list", map[string]any{
-		"wait_all_idle": true,
+		"wait_for_idle": "all",
 		"timeout_ms":    150,
 	})
 	assert.False(t, result.IsError, textContent(t, result))
@@ -239,11 +239,10 @@ func TestWorkspaceList_WaitAllIdle_Timeout(t *testing.T) {
 	assert.False(t, *out.Workspaces[0].IdleStatus)
 }
 
-func TestWorkspaceList_BothWaitFlags_Error(t *testing.T) {
+func TestWorkspaceList_InvalidWaitForIdle_Error(t *testing.T) {
 	s := newTestServer(&mockManager{}, &mockPaneCapture{}, &mockStoreUpdater{})
 	result := callTool(t, s, "workspace_list", map[string]any{
-		"wait_any_idle": true,
-		"wait_all_idle": true,
+		"wait_for_idle": "bogus",
 	})
 	assert.True(t, result.IsError)
 }

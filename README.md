@@ -145,10 +145,8 @@ Create a new workspace: git worktree + tmux session + Claude Code instance.
 List all workspaces.
 
 **Inputs:**
-- `wait_any_idle` (bool, optional) — block until at least one workspace is idle
-- `wait_all_idle` (bool, optional) — block until all workspaces are idle
-
-`wait_any_idle` and `wait_all_idle` are mutually exclusive.
+- `wait_for_idle` (string, optional, default `"none"`) — `"none"` returns immediately; `"any"` blocks until at least one workspace is idle; `"all"` blocks until all workspaces are idle
+- `timeout_ms` (number, optional, default 600000) — maximum wait in milliseconds when `wait_for_idle` is set
 
 **Output:** JSON array: `[{id, name, branch, tmuxSession, worktreePath, idle}]`
 
@@ -239,7 +237,7 @@ Human ──► tmux attach-session -t hangar-<name>  (at any time)
 
 1. `workspace_create` × N — spin up N workspaces.
 2. `workspace_send` to each — inject prompts.
-3. `workspace_list {wait_all_idle: true}` — block until all finish, OR call `workspace_read` per workspace in sequence (each call blocks until that pane is idle).
+3. `workspace_list {wait_for_idle: "all"}` — block until all finish, OR call `workspace_read` per workspace in sequence (each call blocks until that pane is idle).
 4. `workspace_delete` each when done.
 
 ---
