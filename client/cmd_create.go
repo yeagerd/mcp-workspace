@@ -25,8 +25,14 @@ func (m metaValues) Set(val string) error {
 func cmdCreate(opts globalOpts, args []string) error {
 	fs := flag.NewFlagSet("harness-client create", flag.ContinueOnError)
 	var branch string
+	var baseBranch string
+	var createBranch bool
+	var prompt string
 	meta := make(metaValues)
 	fs.StringVar(&branch, "branch", "", "git branch to create or check out (defaults to name)")
+	fs.StringVar(&baseBranch, "base-branch", "", "branch or commit to branch from when creating a new branch (defaults to HEAD)")
+	fs.BoolVar(&createBranch, "create-branch", true, "create a new branch; set false to check out an existing one")
+	fs.StringVar(&prompt, "prompt", "", "first prompt to send to Claude after startup (waits up to 30s for idle)")
 	fs.Var(meta, "meta", "key=value metadata (repeatable: --meta k=v --meta k2=v2)")
 
 	if err := fs.Parse(args); err != nil {
@@ -51,6 +57,15 @@ func cmdCreate(opts globalOpts, args []string) error {
 	toolArgs := map[string]any{"name": name}
 	if branch != "" {
 		toolArgs["branch"] = branch
+	}
+	if baseBranch != "" {
+		toolArgs["base_branch"] = baseBranch
+	}
+	if !createBranch {
+		toolArgs["create_branch"] = false
+	}
+	if prompt != "" {
+		toolArgs["prompt"] = prompt
 	}
 	if len(meta) > 0 {
 		m := make(map[string]any, len(meta))
