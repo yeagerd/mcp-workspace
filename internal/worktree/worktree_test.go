@@ -115,16 +115,24 @@ func TestParsePorcelain_Empty(t *testing.T) {
 func TestAdd_NewBranch(t *testing.T) {
 	m := &mockExecutor{}
 	c := NewWithExecutor("/repo", m)
-	err := c.Add("/repo/wt/feat", "feat", true)
+	err := c.Add("/repo/wt/feat", "feat", true, "")
 	require.NoError(t, err)
 	assert.Equal(t, "/repo", m.lastRepo)
 	assert.Equal(t, []string{"worktree", "add", "/repo/wt/feat", "-b", "feat"}, m.lastArgs)
 }
 
+func TestAdd_NewBranchWithBase(t *testing.T) {
+	m := &mockExecutor{}
+	c := NewWithExecutor("/repo", m)
+	err := c.Add("/repo/wt/feat", "feat", true, "main")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"worktree", "add", "/repo/wt/feat", "-b", "feat", "main"}, m.lastArgs)
+}
+
 func TestAdd_ExistingBranch(t *testing.T) {
 	m := &mockExecutor{}
 	c := NewWithExecutor("/repo", m)
-	err := c.Add("/repo/wt/feat", "feat", false)
+	err := c.Add("/repo/wt/feat", "feat", false, "")
 	require.NoError(t, err)
 	assert.Equal(t, []string{"worktree", "add", "/repo/wt/feat", "feat"}, m.lastArgs)
 }
@@ -135,14 +143,14 @@ func TestAdd_PathExists(t *testing.T) {
 		err: errors.New("exit status 128"),
 	}
 	c := NewWithExecutor("/repo", m)
-	err := c.Add("/repo/wt/feat", "feat", true)
+	err := c.Add("/repo/wt/feat", "feat", true, "")
 	assert.ErrorIs(t, err, ErrWorktreePathExists)
 }
 
 func TestAdd_OtherError(t *testing.T) {
 	m := &mockExecutor{out: []byte("unknown error"), err: errors.New("exit status 1")}
 	c := NewWithExecutor("/repo", m)
-	err := c.Add("/repo/wt/feat", "feat", true)
+	err := c.Add("/repo/wt/feat", "feat", true, "")
 	assert.Error(t, err)
 	assert.NotErrorIs(t, err, ErrWorktreePathExists)
 }

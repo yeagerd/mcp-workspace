@@ -22,7 +22,7 @@ type mockWorktree struct {
 	checkErr error
 }
 
-func (m *mockWorktree) Add(_, _ string, _ bool) error                     { return nil }
+func (m *mockWorktree) Add(_, _ string, _ bool, _ string) error           { return nil }
 func (m *mockWorktree) Remove(_ string, _ bool) error                     { return nil }
 func (m *mockWorktree) FindByPath(_ string) (worktree.WorktreeInfo, bool) { return worktree.WorktreeInfo{}, false }
 func (m *mockWorktree) CheckClean(_, _ string) (bool, bool, error) {

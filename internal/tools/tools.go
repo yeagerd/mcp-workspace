@@ -213,6 +213,13 @@ func Register(s *server.MCPServer, mgr Manager, capture PaneCapture, storeUpd St
 		mcp.WithString("branch",
 			mcp.Description("Git branch to create or check out (defaults to name)"),
 		),
+		mcp.WithString("base_branch",
+			mcp.Description("Branch or commit to branch from when create_branch is true (defaults to HEAD)"),
+		),
+		mcp.WithBoolean("create_branch",
+			mcp.Description("If false, check out an existing branch instead of creating a new one (default true)"),
+			mcp.DefaultBool(true),
+		),
 		mcp.WithObject("meta",
 			mcp.Description("Freeform string key-value metadata"),
 		),
@@ -222,6 +229,8 @@ func Register(s *server.MCPServer, mgr Manager, capture PaneCapture, storeUpd St
 			return mcp.NewToolResultError("name is required"), nil
 		}
 		branch := req.GetString("branch", "")
+		baseBranch := req.GetString("base_branch", "")
+		createBranch := req.GetBool("create_branch", true)
 
 		var meta map[string]string
 		if raw, ok := req.GetArguments()["meta"]; ok && raw != nil {
@@ -233,7 +242,13 @@ func Register(s *server.MCPServer, mgr Manager, capture PaneCapture, storeUpd St
 			}
 		}
 
-		ws, err := mgr.Create(ctx, workspace.CreateOptions{Name: name, Branch: branch, Meta: meta})
+		ws, err := mgr.Create(ctx, workspace.CreateOptions{
+			Name:         name,
+			Branch:       branch,
+			BaseBranch:   baseBranch,
+			CreateBranch: createBranch,
+			Meta:         meta,
+		})
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
