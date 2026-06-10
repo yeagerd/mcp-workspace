@@ -102,6 +102,13 @@ type idleEntry struct {
 	Idle bool `json:"idle"`
 }
 
+// readResult is the JSON shape returned by workspace_read.
+type readResult struct {
+	Content    string `json:"content"`
+	CapturedAt string `json:"captured_at"`
+	Idle       *bool  `json:"idle"`
+}
+
 func jsonText(v any) (*mcp.CallToolResult, error) {
 	b, err := json.Marshal(v)
 	if err != nil {
@@ -338,7 +345,7 @@ func Register(s *server.MCPServer, mgr Manager, capture PaneCapture, storeUpd St
 		mcp.WithNumber("lines",
 			mcp.Description("Number of lines to capture (default 200, max 2000)"),
 		),
-	), func(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		id, err := req.RequireString("id")
 		if err != nil {
 			return mcp.NewToolResultError("id is required"), nil
@@ -362,9 +369,23 @@ func Register(s *server.MCPServer, mgr Manager, capture PaneCapture, storeUpd St
 			return mcp.NewToolResultError(fmt.Sprintf("capture failed: %v", err)), nil
 		}
 
-		return jsonText(map[string]any{
-			"content":     content,
-			"captured_at": time.Now().UTC().Format(time.RFC3339),
+		wsState := idle.WorkspaceState{
+			ID: ws.ID, Name: ws.Name, TmuxSession: ws.TmuxSession,
+			LastCaptureHash: ws.LastCaptureHash, LastChangedAt: ws.LastChangedAt,
+		}
+		idleMap := idle.IsIdle(ctx, []idle.WorkspaceState{wsState}, capture, storeUpd, defaultThresholdMs, 500)
+		var idleStatus *bool
+		if status, ok := idleMap[ws.ID]; ok {
+			v := status.Idle
+			idleStatus = &v
+		} else {
+			fmt.Fprintf(os.Stderr, "workspace_read: idle check failed for %s\n", id)
+		}
+
+		return jsonText(readResult{
+			Content:    content,
+			CapturedAt: time.Now().UTC().Format(time.RFC3339),
+			Idle:       idleStatus,
 		})
 	})
 

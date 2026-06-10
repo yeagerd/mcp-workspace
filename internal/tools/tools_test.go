@@ -321,10 +321,35 @@ func TestWorkspaceRead_Happy(t *testing.T) {
 	s := newTestServer(mgr, cap, &mockStoreUpdater{})
 	result := callTool(t, s, "workspace_read", map[string]any{"id": "ws-1"})
 	assert.False(t, result.IsError, textContent(t, result))
-	var out map[string]any
+	var out readResult
 	require.NoError(t, json.Unmarshal([]byte(textContent(t, result)), &out))
-	assert.Equal(t, "line1\nline2\n", out["content"])
-	assert.NotEmpty(t, out["captured_at"])
+	assert.Equal(t, "line1\nline2\n", out.Content)
+	assert.NotEmpty(t, out.CapturedAt)
+	// idle check always runs; hash changed on first pass → not yet idle
+	require.NotNil(t, out.Idle)
+	assert.False(t, *out.Idle)
+}
+
+func TestWorkspaceRead_IdleTrue(t *testing.T) {
+	content := "stable\n"
+	h := paneHash(content)
+	ws := workspace.Workspace{
+		ID: "ws-1", Name: "myws", TmuxSession: "harness-myws",
+		LastCaptureHash: h, LastChangedAt: time.Now().Add(-10 * time.Second),
+	}
+	mgr := &mockManager{workspaces: []workspace.Workspace{ws}}
+	cap := &mockPaneCapture{content: content}
+	upd := &mockStoreUpdater{}
+	s := newTestServer(mgr, cap, upd)
+
+	result := callTool(t, s, "workspace_read", map[string]any{"id": "ws-1"})
+	assert.False(t, result.IsError, textContent(t, result))
+	var out readResult
+	require.NoError(t, json.Unmarshal([]byte(textContent(t, result)), &out))
+	assert.Equal(t, content, out.Content)
+	assert.NotEmpty(t, out.CapturedAt)
+	require.NotNil(t, out.Idle)
+	assert.True(t, *out.Idle)
 }
 
 func TestWorkspaceAttachHint(t *testing.T) {
