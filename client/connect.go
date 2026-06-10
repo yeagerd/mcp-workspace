@@ -32,15 +32,15 @@ func connect(ctx context.Context, opts globalOpts) (*mcpclient.Client, func(), e
 		args = []string{}
 	}
 
-	// Strip HARNESS_* env vars so parent-shell config doesn't conflict, then
-	// inject env vars sourced from .mcp.json (e.g. HARNESS_REPO_PATH).
+	// Strip HANGAR_* env vars so parent-shell config doesn't conflict, then
+	// inject env vars sourced from .mcp.json (e.g. HANGAR_REPO_PATH).
 	cmdFunc := transport.WithCommandFunc(func(
 		fCtx context.Context, command string, env []string, fArgs []string,
 	) (*exec.Cmd, error) {
 		cmd := exec.CommandContext(fCtx, command, fArgs...)
 		filtered := make([]string, 0, len(os.Environ()))
 		for _, e := range os.Environ() {
-			if !strings.HasPrefix(e, "HARNESS_") {
+			if !strings.HasPrefix(e, "HANGAR_") {
 				filtered = append(filtered, e)
 			}
 		}

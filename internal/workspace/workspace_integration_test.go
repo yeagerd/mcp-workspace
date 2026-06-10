@@ -19,8 +19,8 @@ import (
 
 func skipIfNoIntegration(t *testing.T) {
 	t.Helper()
-	if os.Getenv("HARNESS_INTEGRATION") != "1" {
-		t.Skip("set HARNESS_INTEGRATION=1 to run integration tests")
+	if os.Getenv("HANGAR_INTEGRATION") != "1" {
+		t.Skip("set HANGAR_INTEGRATION=1 to run integration tests")
 	}
 }
 

@@ -24,7 +24,7 @@ type Config struct {
 const (
 	defaultClaudeCmd       = "claude"
 	defaultIdleThresholdMs = 1000
-	defaultSessionPrefix   = "harness-"
+	defaultSessionPrefix   = "hangar-"
 	defaultMaxWorkspaces   = 10
 )
 
@@ -56,13 +56,13 @@ func Load(configPath string) (*Config, error) {
 	}
 
 	// Environment variable overrides.
-	applyEnvString("HARNESS_REPO_PATH", &cfg.RepoPath)
-	applyEnvString("HARNESS_WORKTREE_ROOT", &cfg.WorktreeRoot)
-	applyEnvString("HARNESS_STORE_PATH", &cfg.StorePath)
-	applyEnvString("HARNESS_CLAUDE_CMD", &cfg.ClaudeCmd)
-	applyEnvInt("HARNESS_IDLE_THRESHOLD_MS", &cfg.IdleThresholdMs)
-	applyEnvString("HARNESS_SESSION_PREFIX", &cfg.SessionPrefix)
-	applyEnvInt("HARNESS_MAX_WORKSPACES", &cfg.MaxWorkspaces)
+	applyEnvString("HANGAR_REPO_PATH", &cfg.RepoPath)
+	applyEnvString("HANGAR_WORKTREE_ROOT", &cfg.WorktreeRoot)
+	applyEnvString("HANGAR_STORE_PATH", &cfg.StorePath)
+	applyEnvString("HANGAR_CLAUDE_CMD", &cfg.ClaudeCmd)
+	applyEnvInt("HANGAR_IDLE_THRESHOLD_MS", &cfg.IdleThresholdMs)
+	applyEnvString("HANGAR_SESSION_PREFIX", &cfg.SessionPrefix)
+	applyEnvInt("HANGAR_MAX_WORKSPACES", &cfg.MaxWorkspaces)
 
 	// Auto-detect repoPath from git if not set by config or env.
 	if cfg.RepoPath == "" {
@@ -93,7 +93,7 @@ func Load(configPath string) (*Config, error) {
 // Validate checks that cfg is internally consistent and the filesystem prerequisites exist.
 func Validate(cfg *Config) error {
 	if cfg.RepoPath == "" {
-		return fmt.Errorf("repoPath is not set and could not be auto-detected; set HARNESS_REPO_PATH or run from within a git repository")
+		return fmt.Errorf("repoPath is not set and could not be auto-detected; set HANGAR_REPO_PATH or run from within a git repository")
 	}
 	if _, err := os.Stat(cfg.RepoPath); os.IsNotExist(err) {
 		return fmt.Errorf("repoPath %q does not exist", cfg.RepoPath)

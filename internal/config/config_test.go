@@ -28,7 +28,7 @@ func TestLoad_MissingFile(t *testing.T) {
 
 func TestLoad_FromFile(t *testing.T) {
 	// Clear env so file values aren't overridden by the shell environment.
-	t.Setenv("HARNESS_REPO_PATH", "")
+	t.Setenv("HANGAR_REPO_PATH", "")
 
 	tmp := t.TempDir()
 	cfgData := map[string]interface{}{
@@ -58,11 +58,11 @@ func TestLoad_FromFile(t *testing.T) {
 }
 
 func TestLoad_EnvOverrides(t *testing.T) {
-	t.Setenv("HARNESS_REPO_PATH", "/env/repo")
-	t.Setenv("HARNESS_CLAUDE_CMD", "env-claude")
-	t.Setenv("HARNESS_MAX_WORKSPACES", "7")
-	t.Setenv("HARNESS_SESSION_PREFIX", "env-")
-	t.Setenv("HARNESS_IDLE_THRESHOLD_MS", "9000")
+	t.Setenv("HANGAR_REPO_PATH", "/env/repo")
+	t.Setenv("HANGAR_CLAUDE_CMD", "env-claude")
+	t.Setenv("HANGAR_MAX_WORKSPACES", "7")
+	t.Setenv("HANGAR_SESSION_PREFIX", "env-")
+	t.Setenv("HANGAR_IDLE_THRESHOLD_MS", "9000")
 
 	cfg, err := Load("")
 	require.NoError(t, err)
@@ -80,7 +80,7 @@ func TestLoad_EnvOverridesFile(t *testing.T) {
 	cfgFile := filepath.Join(tmp, "config.json")
 	require.NoError(t, os.WriteFile(cfgFile, data, 0o600))
 
-	t.Setenv("HARNESS_CLAUDE_CMD", "env-claude")
+	t.Setenv("HANGAR_CLAUDE_CMD", "env-claude")
 
 	cfg, err := Load(cfgFile)
 	require.NoError(t, err)
@@ -98,7 +98,7 @@ func TestValidate_Valid(t *testing.T) {
 		StorePath:     filepath.Join(tmp, "store", "ws.json"),
 		ClaudeCmd:     "claude",
 		MaxWorkspaces: 10,
-		SessionPrefix: "harness-",
+		SessionPrefix: "hangar-",
 	}
 	require.NoError(t, Validate(cfg))
 	_, err := os.Stat(cfg.WorktreeRoot)
@@ -166,7 +166,7 @@ func TestValidate_EmptyRepoPath(t *testing.T) {
 
 func TestLoad_AutoDetectRepoPath(t *testing.T) {
 	// Unset override so auto-detection runs.
-	t.Setenv("HARNESS_REPO_PATH", "")
+	t.Setenv("HANGAR_REPO_PATH", "")
 
 	cfg, err := Load("")
 	require.NoError(t, err)
@@ -177,7 +177,7 @@ func TestLoad_AutoDetectRepoPath(t *testing.T) {
 }
 
 func TestLoad_AutoDetectFails_RepoPathEmpty(t *testing.T) {
-	t.Setenv("HARNESS_REPO_PATH", "")
+	t.Setenv("HANGAR_REPO_PATH", "")
 
 	orig := detectRepoPathFn
 	detectRepoPathFn = func() (string, error) {

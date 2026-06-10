@@ -53,7 +53,7 @@ func Execute(args []string) error {
 	}
 
 	// Load .mcp.json from the working directory to pick up server binary,
-	// args, and env (e.g. HARNESS_REPO_PATH) without requiring explicit flags.
+	// args, and env (e.g. HANGAR_REPO_PATH) without requiring explicit flags.
 	if cwd, err := os.Getwd(); err == nil {
 		if entry := findProjectMCPConfig(cwd); entry != nil {
 			if opts.binaryPath == "" && entry.Command != "" {

@@ -33,15 +33,15 @@ All fields are optional. Configuration can be supplied via a JSON file and/or en
 
 | Field | Env var | Default | Description |
 |-------|---------|---------|-------------|
-| `repoPath` | `HARNESS_REPO_PATH` | auto-detected from caller's working directory | Absolute path to the git repository being managed |
-| `worktreeRoot` | `HARNESS_WORKTREE_ROOT` | `<repoPath>/../worktrees` | Directory where worktrees are created |
-| `storePath` | `HARNESS_STORE_PATH` | `<repoPath>/.hangar/workspaces.json` | Path to the JSON workspace registry |
-| `claudeCmd` | `HARNESS_CLAUDE_CMD` | `claude` | Command to launch Claude Code |
-| `idleThresholdMs` | `HARNESS_IDLE_THRESHOLD_MS` | `1000` | Milliseconds of pane inactivity before a session is "idle" |
-| `sessionPrefix` | `HARNESS_SESSION_PREFIX` | `harness-` | Prefix for tmux session names |
-| `maxWorkspaces` | `HARNESS_MAX_WORKSPACES` | `10` | Hard cap on concurrent active workspaces (1–50) |
+| `repoPath` | `HANGAR_REPO_PATH` | auto-detected from caller's working directory | Absolute path to the git repository being managed |
+| `worktreeRoot` | `HANGAR_WORKTREE_ROOT` | `<repoPath>/../worktrees` | Directory where worktrees are created |
+| `storePath` | `HANGAR_STORE_PATH` | `<repoPath>/.hangar/workspaces.json` | Path to the JSON workspace registry |
+| `claudeCmd` | `HANGAR_CLAUDE_CMD` | `claude` | Command to launch Claude Code |
+| `idleThresholdMs` | `HANGAR_IDLE_THRESHOLD_MS` | `1000` | Milliseconds of pane inactivity before a session is "idle" |
+| `sessionPrefix` | `HANGAR_SESSION_PREFIX` | `hangar-` | Prefix for tmux session names |
+| `maxWorkspaces` | `HANGAR_MAX_WORKSPACES` | `10` | Hard cap on concurrent active workspaces (1–50) |
 
-**Example config file** (`harness-config.json`):
+**Example config file** (`hangar-config.json`):
 
 ```json
 {
@@ -65,7 +65,7 @@ Add the server to your Claude Code MCP config (typically `~/.claude/mcp.json` or
     "hangar": {
       "command": "/usr/local/bin/hangar",
       "env": {
-        "HARNESS_REPO_PATH": "/home/alice/myproject"
+        "HANGAR_REPO_PATH": "/home/alice/myproject"
       }
     }
   }
@@ -100,7 +100,7 @@ Generic stdio MCP entry (adjust `command` and `env` as needed):
       "transport": "stdio",
       "command": "/usr/local/bin/hangar",
       "env": {
-        "HARNESS_REPO_PATH": "/home/alice/myproject"
+        "HANGAR_REPO_PATH": "/home/alice/myproject"
       }
     }
   ]
@@ -221,10 +221,10 @@ Orchestrator Claude Code (has hangar MCP registered)
   hangar binary
         │
         ├── git worktrees (one per workspace)
-        └── tmux sessions (one per workspace, named harness-<name>)
+        └── tmux sessions (one per workspace, named hangar-<name>)
                 └── Worker Claude Code instances (one per session)
 
-Human ──► tmux attach-session -t harness-<name>  (at any time)
+Human ──► tmux attach-session -t hangar-<name>  (at any time)
 ```
 
 **Typical single-worker flow:**
@@ -255,7 +255,7 @@ Human ──► tmux attach-session -t harness-<name>  (at any time)
 ## Troubleshooting
 
 **"Claude Code didn't launch in tmux"**
-Check `HARNESS_CLAUDE_CMD` points to a valid binary. The session is still created — attach to it manually and launch `claude` to inspect.
+Check `HANGAR_CLAUDE_CMD` points to a valid binary. The session is still created — attach to it manually and launch `claude` to inspect.
 
 **"worktree already exists"**
 A previous run left a stale worktree. Run `git worktree prune` in the repo, or use `workspace_delete` to clean up via the MCP interface.

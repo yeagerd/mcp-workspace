@@ -16,8 +16,8 @@ import (
 )
 
 func TestIntegration_ListEmptyStore(t *testing.T) {
-	if os.Getenv("HARNESS_INTEGRATION") != "1" {
-		t.Skip("set HARNESS_INTEGRATION=1 to run integration tests")
+	if os.Getenv("HANGAR_INTEGRATION") != "1" {
+		t.Skip("set HANGAR_INTEGRATION=1 to run integration tests")
 	}
 
 	// Find repo root (directory containing go.mod).

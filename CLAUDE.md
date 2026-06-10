@@ -19,7 +19,7 @@ go build ./...                   # compile everything
 go vet ./...                     # static analysis
 go test -race ./...              # unit tests with race detector
 go test -race -short ./...       # skip integration tests
-HARNESS_INTEGRATION=1 go test -race -tags integration ./...  # integration tests
+HANGAR_INTEGRATION=1 go test -race -tags integration ./...  # integration tests
 golangci-lint run                # lint
 make build                       # build binary
 make test                        # unit tests (short)
@@ -87,7 +87,7 @@ All packages under `internal/` are unexported. The binary is the only artifact.
    ```
    If integration tests are relevant to the task, also run:
    ```sh
-   HARNESS_INTEGRATION=1 go test -race -tags integration ./...
+   HANGAR_INTEGRATION=1 go test -race -tags integration ./...
    ```
 
 3. **Fix** — if any tests fail, fix them before proceeding. Do not move on with a broken test suite.

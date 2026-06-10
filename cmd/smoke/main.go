@@ -97,11 +97,11 @@ func main() {
 		harnessArgs = append(harnessArgs, "--config", *configPath)
 	}
 
-	// Inject HARNESS_REPO_PATH only when explicitly provided; otherwise the
+	// Inject HANGAR_REPO_PATH only when explicitly provided; otherwise the
 	// server auto-detects via git rev-parse --show-toplevel.
 	env := os.Environ()
 	if *repoPath != "" {
-		env = append(env, "HARNESS_REPO_PATH="+*repoPath)
+		env = append(env, "HANGAR_REPO_PATH="+*repoPath)
 	}
 
 	logf("starting harness: %s %v", *binaryPath, harnessArgs)
