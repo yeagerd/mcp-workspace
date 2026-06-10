@@ -48,19 +48,24 @@ func newRateLimiter() *rateLimiter {
 	return &rateLimiter{lastSend: make(map[string]time.Time)}
 }
 
-const sendCooldownMs = 200
+const sendCooldown = 200 * time.Millisecond
 
-func (r *rateLimiter) check(id string) (retryAfterMs int64, ok bool) {
+// wait blocks until the per-workspace cooldown has elapsed, then records the send time.
+func (r *rateLimiter) wait(id string) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
+	var sleepDur time.Duration
 	if last, exists := r.lastSend[id]; exists {
-		elapsed := time.Since(last).Milliseconds()
-		if elapsed < sendCooldownMs {
-			return sendCooldownMs - elapsed, false
+		if elapsed := time.Since(last); elapsed < sendCooldown {
+			sleepDur = sendCooldown - elapsed
 		}
 	}
+	r.mu.Unlock()
+	if sleepDur > 0 {
+		time.Sleep(sleepDur)
+	}
+	r.mu.Lock()
 	r.lastSend[id] = time.Now()
-	return 0, true
+	r.mu.Unlock()
 }
 
 // workspaceSummary is the JSON shape for list output.
@@ -309,13 +314,8 @@ func Register(s *server.MCPServer, mgr Manager, capture PaneCapture, storeUpd St
 			), nil
 		}
 
-		// Rate limiting: max one send per workspace per 200 ms.
-		retryAfterMs, ok := rl.check(ws.ID)
-		if !ok {
-			return mcp.NewToolResultError(
-				fmt.Sprintf(`{"error":"rate limited","retry_after_ms":%d}`, retryAfterMs),
-			), nil
-		}
+		// Rate limiting: block up to 200 ms so the caller never sees a rate-limit error.
+		rl.wait(ws.ID)
 
 		if err := mgr.SendKeys(ws.ID, text, pressEnter); err != nil {
 			fmt.Fprintf(os.Stderr, "workspace_send: error: %v\n", err)
