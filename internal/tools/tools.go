@@ -144,22 +144,26 @@ func Register(s *server.MCPServer, mgr Manager, capture PaneCapture, storeUpd St
 	// workspace_list
 	s.AddTool(mcp.NewTool("workspace_list",
 		mcp.WithDescription("List all workspaces."),
-		mcp.WithBoolean("wait_any_idle",
-			mcp.Description("Block until at least one workspace is idle, then return the list"),
-		),
-		mcp.WithBoolean("wait_all_idle",
-			mcp.Description("Block until all workspaces are idle, then return the list"),
+		mcp.WithString("wait_for_idle",
+			mcp.Description(`Controls whether to block before returning: "none" (default) returns immediately; "any" blocks until at least one workspace is idle; "all" blocks until all workspaces are idle`),
 		),
 		mcp.WithNumber("timeout_ms",
-			mcp.Description("Maximum wait in milliseconds when a wait flag is set (default 600000 = 10 min)"),
+			mcp.Description("Maximum wait in milliseconds when wait_for_idle is set (default 600000 = 10 min)"),
 		),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		waitAny := req.GetBool("wait_any_idle", false)
-		waitAll := req.GetBool("wait_all_idle", false)
+		waitForIdle := req.GetString("wait_for_idle", "none")
 		timeoutMs := int64(req.GetFloat("timeout_ms", 600_000))
 
-		if waitAny && waitAll {
-			return mcp.NewToolResultError("wait_any_idle and wait_all_idle are mutually exclusive"), nil
+		var waitAny, waitAll bool
+		switch waitForIdle {
+		case "none", "":
+			// no wait
+		case "any":
+			waitAny = true
+		case "all":
+			waitAll = true
+		default:
+			return mcp.NewToolResultError(`wait_for_idle must be "none", "any", or "all"`), nil
 		}
 
 		workspaces := mgr.List()
