@@ -94,9 +94,11 @@ type listWaitResult struct {
 
 // readResult is the JSON shape returned by workspace_read.
 type readResult struct {
-	Content    string `json:"content"`
-	CapturedAt string `json:"captured_at"`
-	Idle       *bool  `json:"idle"`
+	Content       string `json:"content"`
+	CapturedAt    string `json:"captured_at"`
+	Idle          *bool  `json:"idle"`
+	TotalLines    int    `json:"total_lines"`
+	ReturnedLines int    `json:"returned_lines"`
 }
 
 func jsonText(v any) (*mcp.CallToolResult, error) {
@@ -341,6 +343,9 @@ func Register(s *server.MCPServer, mgr Manager, capture PaneCapture, storeUpd St
 		mcp.WithNumber("timeout_ms",
 			mcp.Description("Maximum time to wait for idle in milliseconds (default 3600000 = 1 hour)"),
 		),
+		mcp.WithNumber("since_line",
+			mcp.Description("Return only lines at or after this offset from the start of the captured buffer. Pass the previous total_lines to retrieve only new content. Best-effort — the tmux capture-pane buffer scrolls, so this is not a guaranteed log offset."),
+		),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		id, err := req.RequireString("id")
 		if err != nil {
@@ -355,6 +360,10 @@ func Register(s *server.MCPServer, mgr Manager, capture PaneCapture, storeUpd St
 		}
 		waitIdle := req.GetBool("wait_idle", true)
 		timeoutMs := int64(req.GetFloat("timeout_ms", 3_600_000))
+		sinceLine := int(req.GetFloat("since_line", 0))
+		if sinceLine < 0 {
+			sinceLine = 0
+		}
 
 		ws, err := mgr.Resolve(id)
 		if err != nil {
@@ -393,10 +402,21 @@ func Register(s *server.MCPServer, mgr Manager, capture PaneCapture, storeUpd St
 			}
 		}
 
+		allLines := strings.Split(content, "\n")
+		totalLines := len(allLines)
+		var slicedLines []string
+		if sinceLine < totalLines {
+			slicedLines = allLines[sinceLine:]
+		} else {
+			slicedLines = []string{}
+		}
+
 		return jsonText(readResult{
-			Content:    content,
-			CapturedAt: time.Now().UTC().Format(time.RFC3339),
-			Idle:       idleStatus,
+			Content:       strings.Join(slicedLines, "\n"),
+			CapturedAt:    time.Now().UTC().Format(time.RFC3339),
+			Idle:          idleStatus,
+			TotalLines:    totalLines,
+			ReturnedLines: len(slicedLines),
 		})
 	})
 

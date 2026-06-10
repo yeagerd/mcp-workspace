@@ -178,8 +178,19 @@ Capture recent terminal output from a workspace's tmux pane.
 - `lines` (int, optional, default 200, max 2000)
 - `wait_idle` (bool, optional, default true) — block until the pane is stable before capturing
 - `timeout_ms` (int, optional, default 3600000) — maximum time to wait when `wait_idle` is true
+- `since_line` (int, optional, default 0) — return only lines at or after this offset from the start of the captured buffer; pass the previous `total_lines` to retrieve only new content
 
-**Output:** `{"content": "...", "captured_at": "<ISO 8601>", "idle": true/false}`
+> **Note:** `since_line` is a best-effort cursor. `tmux capture-pane` has a bounded scrollback buffer that advances over time, so the same offset may refer to different content across calls. It is not a guaranteed append-only log offset.
+
+**Output:** `{"content": "...", "captured_at": "<ISO 8601>", "idle": true/false, "total_lines": N, "returned_lines": N}`
+
+| Field | Description |
+|-------|-------------|
+| `content` | Terminal output lines (newline-separated) |
+| `captured_at` | ISO 8601 timestamp of the capture |
+| `idle` | Whether the workspace pane was idle at capture time |
+| `total_lines` | Total number of lines in the captured buffer before `since_line` slicing |
+| `returned_lines` | Number of lines included in `content` after slicing |
 
 ---
 
