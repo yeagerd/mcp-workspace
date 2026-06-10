@@ -126,7 +126,7 @@ func (u *mockStoreUpdater) UpdateIdleState(id, hash string, _ time.Time) error {
 
 func newTestServer(mgr Manager, cap PaneCapture, upd StoreUpdater) *mcpserver.MCPServer {
 	s := mcpserver.NewMCPServer("test", "0.1.0", mcpserver.WithToolCapabilities(true))
-	Register(s, mgr, cap, upd, 5000)
+	Register(s, mgr, cap, upd, 50)
 	return s
 }
 
@@ -325,9 +325,8 @@ func TestWorkspaceRead_Happy(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(textContent(t, result)), &out))
 	assert.Equal(t, "line1\nline2\n", out.Content)
 	assert.NotEmpty(t, out.CapturedAt)
-	// idle check always runs; hash changed on first pass → not yet idle
 	require.NotNil(t, out.Idle)
-	assert.False(t, *out.Idle)
+	assert.True(t, *out.Idle)
 }
 
 func TestWorkspaceRead_IdleTrue(t *testing.T) {

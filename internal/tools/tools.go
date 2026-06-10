@@ -199,7 +199,7 @@ func Register(s *server.MCPServer, mgr Manager, capture PaneCapture, storeUpd St
 			return jsonText(listWaitResult{TimedOut: timedOut, Workspaces: summaries})
 		}
 
-		idleMap := idle.IsIdle(ctx, wsStates, capture, storeUpd, defaultThresholdMs, 0)
+		idleMap := idle.IsIdle(ctx, wsStates, capture, defaultThresholdMs, 0)
 
 		summaries := make([]workspaceSummary, len(workspaces))
 		for i, ws := range workspaces {
@@ -373,7 +373,7 @@ func Register(s *server.MCPServer, mgr Manager, capture PaneCapture, storeUpd St
 			ID: ws.ID, Name: ws.Name, TmuxSession: ws.TmuxSession,
 			LastCaptureHash: ws.LastCaptureHash, LastChangedAt: ws.LastChangedAt,
 		}
-		idleMap := idle.IsIdle(ctx, []idle.WorkspaceState{wsState}, capture, storeUpd, defaultThresholdMs, 500)
+		idleMap := idle.IsIdle(ctx, []idle.WorkspaceState{wsState}, capture, defaultThresholdMs, 0)
 		var idleStatus *bool
 		if status, ok := idleMap[ws.ID]; ok {
 			v := status.Idle

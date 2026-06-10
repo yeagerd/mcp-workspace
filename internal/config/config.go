@@ -23,7 +23,7 @@ type Config struct {
 
 const (
 	defaultClaudeCmd       = "claude"
-	defaultIdleThresholdMs = 5000
+	defaultIdleThresholdMs = 1000
 	defaultSessionPrefix   = "harness-"
 	defaultMaxWorkspaces   = 10
 )
