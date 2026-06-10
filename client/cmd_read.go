@@ -11,7 +11,13 @@ import (
 func cmdRead(opts globalOpts, args []string) error {
 	fs := flag.NewFlagSet("harness-client read", flag.ContinueOnError)
 	var lines int
-	fs.IntVar(&lines, "lines", 0, "number of lines to capture (0 = server default)")
+	var waitIdle bool
+	var timeoutMs int64
+	var sinceLine int
+	fs.IntVar(&lines, "lines", 0, "number of lines to capture (0 = server default of 200)")
+	fs.BoolVar(&waitIdle, "wait-idle", true, "wait until the workspace is idle before returning")
+	fs.Int64Var(&timeoutMs, "timeout-ms", 0, "max time to wait for idle in milliseconds (0 = server default of 1 hour)")
+	fs.IntVar(&sinceLine, "since-line", 0, "return only lines at or after this offset from the start of the captured buffer")
 
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -32,9 +38,18 @@ func cmdRead(opts globalOpts, args []string) error {
 	}
 	defer cleanup()
 
-	toolArgs := map[string]any{"id": id}
+	toolArgs := map[string]any{
+		"id":        id,
+		"wait_idle": waitIdle,
+	}
 	if lines > 0 {
 		toolArgs["lines"] = lines
+	}
+	if timeoutMs > 0 {
+		toolArgs["timeout_ms"] = timeoutMs
+	}
+	if sinceLine > 0 {
+		toolArgs["since_line"] = sinceLine
 	}
 
 	raw, err := callTool(ctx, c, "workspace_read", toolArgs)
