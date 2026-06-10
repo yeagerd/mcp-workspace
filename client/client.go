@@ -77,8 +77,6 @@ func Execute(args []string) error {
 		return cmdSend(opts, subArgs)
 	case "read":
 		return cmdRead(opts, subArgs)
-	case "idle":
-		return cmdIdle(opts, subArgs)
 	default:
 		fmt.Fprintf(os.Stderr, "harness-client: unknown subcommand %q\n\n", subcommand)
 		printUsage()
@@ -105,7 +103,6 @@ Subcommands:
   delete        Permanently delete a workspace
   send          Send text to a workspace session
   read          Read terminal output from a workspace
-  idle          Check whether a workspace is idle
 
 Flags:
   --config <path>   Path to config JSON file passed to hangar
