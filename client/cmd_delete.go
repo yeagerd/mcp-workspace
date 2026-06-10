@@ -12,8 +12,10 @@ func cmdDelete(opts globalOpts, args []string) error {
 	fs := flag.NewFlagSet("harness-client delete", flag.ContinueOnError)
 	var confirm bool
 	var force bool
+	var deleteBranch bool
 	fs.BoolVar(&confirm, "confirm", false, "must be set to actually delete")
 	fs.BoolVar(&force, "force", false, "skip dirty/unpushed branch safety check")
+	fs.BoolVar(&deleteBranch, "delete-branch", false, "also delete the git branch after removing the worktree")
 
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -45,6 +47,9 @@ func cmdDelete(opts globalOpts, args []string) error {
 	}
 	if force {
 		toolArgs["force"] = true
+	}
+	if deleteBranch {
+		toolArgs["delete_branch"] = true
 	}
 	raw, err := callTool(ctx, c, "workspace_delete", toolArgs)
 	if err != nil {
