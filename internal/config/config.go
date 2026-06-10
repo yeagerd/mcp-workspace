@@ -25,7 +25,7 @@ const (
 	defaultClaudeCmd       = "claude"
 	defaultIdleThresholdMs = 1000
 	defaultSessionPrefix   = "harness-"
-	defaultMaxWorkspaces   = 10
+	defaultMaxWorkspaces   = 100
 )
 
 // Load reads config from configPath (if non-empty and present), then overrides
@@ -126,8 +126,8 @@ func Validate(cfg *Config) error {
 		return fmt.Errorf("creating storePath directory %q: %w", storeDir, err)
 	}
 
-	if cfg.MaxWorkspaces < 1 || cfg.MaxWorkspaces > 50 {
-		return fmt.Errorf("maxWorkspaces must be between 1 and 50, got %d", cfg.MaxWorkspaces)
+	if cfg.MaxWorkspaces < 1 || cfg.MaxWorkspaces > 100 {
+		return fmt.Errorf("maxWorkspaces must be between 1 and 100, got %d", cfg.MaxWorkspaces)
 	}
 
 	return nil

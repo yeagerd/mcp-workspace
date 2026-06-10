@@ -145,12 +145,12 @@ func TestValidate_MaxWorkspacesBounds(t *testing.T) {
 		SessionPrefix: "h-",
 	}
 
-	for _, bad := range []int{0, 51} {
+	for _, bad := range []int{0, 101} {
 		cfg := *base
 		cfg.MaxWorkspaces = bad
 		assert.Error(t, Validate(&cfg))
 	}
-	for _, good := range []int{1, 25, 50} {
+	for _, good := range []int{1, 50, 100} {
 		cfg := *base
 		cfg.MaxWorkspaces = good
 		assert.NoError(t, Validate(&cfg))

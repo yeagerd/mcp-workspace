@@ -39,7 +39,7 @@ All fields are optional. Configuration can be supplied via a JSON file and/or en
 | `claudeCmd` | `HARNESS_CLAUDE_CMD` | `claude` | Command to launch Claude Code |
 | `idleThresholdMs` | `HARNESS_IDLE_THRESHOLD_MS` | `1000` | Milliseconds of pane inactivity before a session is "idle" |
 | `sessionPrefix` | `HARNESS_SESSION_PREFIX` | `harness-` | Prefix for tmux session names |
-| `maxWorkspaces` | `HARNESS_MAX_WORKSPACES` | `10` | Hard cap on concurrent active workspaces (1–50) |
+| `maxWorkspaces` | `HARNESS_MAX_WORKSPACES` | `100` | Hard cap on concurrent active workspaces (1–100) |
 
 **Example config file** (`harness-config.json`):
 
