@@ -345,6 +345,12 @@ func Register(s *server.MCPServer, mgr Manager, capture PaneCapture, storeUpd St
 		mcp.WithNumber("lines",
 			mcp.Description("Number of lines to capture (default 200, max 2000)"),
 		),
+		mcp.WithBoolean("wait_idle",
+			mcp.Description("Wait until the workspace is idle before returning (default true)"),
+		),
+		mcp.WithNumber("timeout_ms",
+			mcp.Description("Maximum time to wait for idle in milliseconds (default 3600000 = 1 hour)"),
+		),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		id, err := req.RequireString("id")
 		if err != nil {
@@ -357,10 +363,28 @@ func Register(s *server.MCPServer, mgr Manager, capture PaneCapture, storeUpd St
 		if lines > 2000 {
 			lines = 2000
 		}
+		waitIdle := req.GetBool("wait_idle", true)
+		timeoutMs := int64(req.GetFloat("timeout_ms", 3_600_000))
 
 		ws, err := mgr.Resolve(id)
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("workspace not found: %s", id)), nil
+		}
+
+		wsState := idle.WorkspaceState{
+			ID: ws.ID, Name: ws.Name, TmuxSession: ws.TmuxSession,
+			LastCaptureHash: ws.LastCaptureHash, LastChangedAt: ws.LastChangedAt,
+		}
+
+		var idleStatus *bool
+
+		if waitIdle {
+			status, waitErr := idle.WaitUntilIdle(ctx, wsState, capture, storeUpd, defaultThresholdMs, timeoutMs, 500)
+			if waitErr != nil {
+				fmt.Fprintf(os.Stderr, "workspace_read: wait_idle timed out for %s: %v\n", id, waitErr)
+			}
+			v := status.Idle
+			idleStatus = &v
 		}
 
 		content, err := capture.CapturePane(ws.TmuxSession, lines)
@@ -369,17 +393,14 @@ func Register(s *server.MCPServer, mgr Manager, capture PaneCapture, storeUpd St
 			return mcp.NewToolResultError(fmt.Sprintf("capture failed: %v", err)), nil
 		}
 
-		wsState := idle.WorkspaceState{
-			ID: ws.ID, Name: ws.Name, TmuxSession: ws.TmuxSession,
-			LastCaptureHash: ws.LastCaptureHash, LastChangedAt: ws.LastChangedAt,
-		}
-		idleMap := idle.IsIdle(ctx, []idle.WorkspaceState{wsState}, capture, defaultThresholdMs, 0)
-		var idleStatus *bool
-		if status, ok := idleMap[ws.ID]; ok {
-			v := status.Idle
-			idleStatus = &v
-		} else {
-			fmt.Fprintf(os.Stderr, "workspace_read: idle check failed for %s\n", id)
+		if !waitIdle {
+			idleMap := idle.IsIdle(ctx, []idle.WorkspaceState{wsState}, capture, defaultThresholdMs, 0)
+			if status, ok := idleMap[ws.ID]; ok {
+				v := status.Idle
+				idleStatus = &v
+			} else {
+				fmt.Fprintf(os.Stderr, "workspace_read: idle check failed for %s\n", id)
+			}
 		}
 
 		return jsonText(readResult{

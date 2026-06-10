@@ -319,7 +319,8 @@ func TestWorkspaceRead_Happy(t *testing.T) {
 	}}
 	cap := &mockPaneCapture{content: "line1\nline2\n"}
 	s := newTestServer(mgr, cap, &mockStoreUpdater{})
-	result := callTool(t, s, "workspace_read", map[string]any{"id": "ws-1"})
+	// wait_idle=false: skip blocking wait, use IsIdle snapshot check instead.
+	result := callTool(t, s, "workspace_read", map[string]any{"id": "ws-1", "wait_idle": false})
 	assert.False(t, result.IsError, textContent(t, result))
 	var out readResult
 	require.NoError(t, json.Unmarshal([]byte(textContent(t, result)), &out))
@@ -341,7 +342,8 @@ func TestWorkspaceRead_IdleTrue(t *testing.T) {
 	upd := &mockStoreUpdater{}
 	s := newTestServer(mgr, cap, upd)
 
-	result := callTool(t, s, "workspace_read", map[string]any{"id": "ws-1"})
+	// wait_idle=false: snapshot check, workspace is already idle.
+	result := callTool(t, s, "workspace_read", map[string]any{"id": "ws-1", "wait_idle": false})
 	assert.False(t, result.IsError, textContent(t, result))
 	var out readResult
 	require.NoError(t, json.Unmarshal([]byte(textContent(t, result)), &out))
@@ -349,6 +351,61 @@ func TestWorkspaceRead_IdleTrue(t *testing.T) {
 	assert.NotEmpty(t, out.CapturedAt)
 	require.NotNil(t, out.Idle)
 	assert.True(t, *out.Idle)
+}
+
+func TestWorkspaceRead_WaitIdleTrue_BecomesIdle(t *testing.T) {
+	content := "stable\n"
+	h := paneHash(content)
+	ws := workspace.Workspace{
+		ID: "ws-1", Name: "myws", TmuxSession: "harness-myws",
+		LastCaptureHash: h, LastChangedAt: time.Now().Add(-10 * time.Second),
+	}
+	mgr := &mockManager{workspaces: []workspace.Workspace{ws}}
+	cap := &mockPaneCapture{content: content}
+	upd := &mockStoreUpdater{}
+	s := newTestServer(mgr, cap, upd)
+
+	// wait_idle=true: WaitUntilIdle returns immediately because already idle.
+	result := callTool(t, s, "workspace_read", map[string]any{
+		"id":         "ws-1",
+		"wait_idle":  true,
+		"timeout_ms": 5000,
+	})
+	assert.False(t, result.IsError, textContent(t, result))
+	var out readResult
+	require.NoError(t, json.Unmarshal([]byte(textContent(t, result)), &out))
+	assert.Equal(t, content, out.Content)
+	assert.NotEmpty(t, out.CapturedAt)
+	require.NotNil(t, out.Idle)
+	assert.True(t, *out.Idle)
+}
+
+func TestWorkspaceRead_WaitIdleTrue_Timeout(t *testing.T) {
+	// Content changes on every call → never idle. Timeout fires before 500 ms poll tick.
+	call := 0
+	ws := workspace.Workspace{
+		ID: "ws-1", Name: "myws", TmuxSession: "harness-myws",
+	}
+	capFunc := &funcCapture{fn: func() string {
+		call++
+		return fmt.Sprintf("line %d\n", call)
+	}}
+	mgr := &mockManager{workspaces: []workspace.Workspace{ws}}
+	upd := &mockStoreUpdater{}
+	s := newTestServer(mgr, capFunc, upd)
+
+	result := callTool(t, s, "workspace_read", map[string]any{
+		"id":         "ws-1",
+		"wait_idle":  true,
+		"timeout_ms": 150,
+	})
+	assert.False(t, result.IsError, textContent(t, result))
+	var out readResult
+	require.NoError(t, json.Unmarshal([]byte(textContent(t, result)), &out))
+	require.NotNil(t, out.Idle)
+	assert.False(t, *out.Idle) // timed out → not idle
+	assert.NotEmpty(t, out.Content)
+	assert.NotEmpty(t, out.CapturedAt)
 }
 
 func TestWorkspaceAttachHint(t *testing.T) {
