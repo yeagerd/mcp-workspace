@@ -91,10 +91,12 @@ func toSummary(ws workspace.Workspace) workspaceSummary {
 	}
 }
 
-// listWaitResult is the JSON shape returned by workspace_list when a wait flag is set.
-type listWaitResult struct {
-	TimedOut   bool               `json:"timed_out"`
-	Workspaces []workspaceSummary `json:"workspaces"`
+// listResult is the JSON envelope returned by workspace_list.
+type listResult struct {
+	MaxWorkspaces int                `json:"max_workspaces"`
+	ActiveCount   int                `json:"active_count"`
+	TimedOut      bool               `json:"timed_out"`
+	Workspaces    []workspaceSummary `json:"workspaces"`
 }
 
 // readResult is the JSON shape returned by workspace_read.
@@ -113,7 +115,7 @@ func jsonText(v any) (*mcp.CallToolResult, error) {
 }
 
 // Register adds all workspace tools and the pane resource template to s.
-func Register(s *server.MCPServer, mgr Manager, capture PaneCapture, storeUpd StoreUpdater, defaultThresholdMs int64) {
+func Register(s *server.MCPServer, mgr Manager, capture PaneCapture, storeUpd StoreUpdater, defaultThresholdMs int64, maxWorkspaces int) {
 	// MCP resource: workspace://{id}/pane — returns current pane content as text.
 	s.AddResourceTemplate(
 		mcp.NewResourceTemplate(
@@ -195,7 +197,7 @@ func Register(s *server.MCPServer, mgr Manager, capture PaneCapture, storeUpd St
 				}
 				summaries[i] = sum
 			}
-			return jsonText(listWaitResult{TimedOut: timedOut, Workspaces: summaries})
+			return jsonText(listResult{MaxWorkspaces: maxWorkspaces, ActiveCount: len(workspaces), TimedOut: timedOut, Workspaces: summaries})
 		}
 
 		idleMap := idle.IsIdle(ctx, wsStates, capture, defaultThresholdMs, 0)
@@ -209,7 +211,7 @@ func Register(s *server.MCPServer, mgr Manager, capture PaneCapture, storeUpd St
 			}
 			summaries[i] = sum
 		}
-		return jsonText(summaries)
+		return jsonText(listResult{MaxWorkspaces: maxWorkspaces, ActiveCount: len(workspaces), Workspaces: summaries})
 	})
 
 	// workspace_create

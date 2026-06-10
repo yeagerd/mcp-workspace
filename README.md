@@ -151,7 +151,16 @@ List all workspaces.
 - `wait_for_idle` (string, optional, default `"none"`) — `"none"` returns immediately; `"any"` blocks until at least one workspace is idle; `"all"` blocks until all workspaces are idle
 - `timeout_ms` (number, optional, default 600000) — maximum wait in milliseconds when `wait_for_idle` is set
 
-**Output:** JSON array: `[{id, name, branch, tmuxSession, worktreePath, idle}]`
+**Output:** JSON envelope:
+```json
+{
+  "max_workspaces": 10,
+  "active_count": 3,
+  "timed_out": false,
+  "workspaces": [{id, name, branch, tmuxSession, worktreePath, idleStatus}]
+}
+```
+`timed_out` is only `true` when a wait flag is set and the timeout fires before the condition is met.
 
 ---
 
