@@ -54,10 +54,15 @@ func NewWithExecutor(repoPath string, e Executor) *Client {
 
 // Add creates a new worktree at worktreePath. If createBranch is true, a new branch named
 // branchName is created; otherwise the existing branch is checked out.
-func (c *Client) Add(worktreePath, branchName string, createBranch bool) error {
+// When createBranch is true and baseBranch is non-empty, the new branch is created from
+// baseBranch instead of HEAD (git worktree add <path> -b <branch> <base>).
+func (c *Client) Add(worktreePath, branchName string, createBranch bool, baseBranch string) error {
 	args := []string{"worktree", "add", worktreePath}
 	if createBranch {
 		args = append(args, "-b", branchName)
+		if baseBranch != "" {
+			args = append(args, baseBranch)
+		}
 	} else {
 		args = append(args, branchName)
 	}

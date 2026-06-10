@@ -32,7 +32,7 @@ var reservedNames = map[string]bool{"new": true, "list": true, "delete": true}
 
 // worktreeClient is the subset of *worktree.Client that Manager requires.
 type worktreeClient interface {
-	Add(worktreePath, branchName string, createBranch bool) error
+	Add(worktreePath, branchName string, createBranch bool, baseBranch string) error
 	Remove(worktreePath string, force bool) error
 	FindByPath(path string) (worktree.WorktreeInfo, bool)
 	CheckClean(worktreePath, branch string) (dirty bool, unpushed bool, err error)
@@ -40,10 +40,12 @@ type worktreeClient interface {
 
 // CreateOptions holds parameters for creating a workspace.
 type CreateOptions struct {
-	Name   string
-	Branch string
-	Meta   map[string]string
-	Prompt string
+	Name         string
+	Branch       string
+	BaseBranch   string
+	CreateBranch bool
+	Meta         map[string]string
+	Prompt       string
 }
 
 // Manager is the high-level workspace coordinator.
@@ -88,7 +90,7 @@ func (m *Manager) Create(ctx context.Context, opts CreateOptions) (Workspace, er
 	worktreePath := filepath.Join(m.cfg.WorktreeRoot, opts.Name)
 
 	// Step 1: create worktree.
-	if err := m.worktree.Add(worktreePath, branch, true); err != nil {
+	if err := m.worktree.Add(worktreePath, branch, opts.CreateBranch, opts.BaseBranch); err != nil {
 		return Workspace{}, fmt.Errorf("creating worktree: %w", err)
 	}
 

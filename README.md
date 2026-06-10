@@ -133,7 +133,9 @@ Create a new workspace: git worktree + tmux session + Claude Code instance.
 
 **Inputs:**
 - `name` (string, required) — lowercase alphanumeric and hyphens, 1–40 chars
-- `branch` (string, optional) — git branch to create; defaults to `name`
+- `branch` (string, optional) — git branch to create or check out; defaults to `name`
+- `base_branch` (string, optional) — branch or commit to branch from when `create_branch` is true; defaults to HEAD
+- `create_branch` (bool, optional, default `true`) — if `false`, check out `branch` as an existing branch rather than creating a new one
 - `meta` (object, optional) — freeform string key-value metadata
 - `prompt` (string, optional) — first prompt to send to Claude; the server waits up to 30 s for Claude to finish starting before sending, eliminating the need for a separate `workspace_send` call
 
