@@ -143,13 +143,13 @@ func (m *Manager) Create(ctx context.Context, opts CreateOptions) (Workspace, er
 }
 
 // Delete kills the workspace: exits the Claude session, removes the worktree,
-// deletes the git branch, and removes the store entry.
+// optionally deletes the git branch, and removes the store entry.
 // confirmed must be true — if false, returns ErrDeleteNotConfirmed without doing anything.
 // If force is false, Delete refuses to proceed when the worktree has uncommitted changes
 // or unpushed commits.
-//
-// WARNING: This is the only operation that deletes a git branch. It cannot be undone.
-func (m *Manager) Delete(ctx context.Context, id string, confirmed bool, force bool) error {
+// If deleteBranch is false (the default), the git branch is preserved after the worktree
+// is removed — useful when the branch needs to survive for a PR or review.
+func (m *Manager) Delete(ctx context.Context, id string, confirmed bool, force bool, deleteBranch bool) error {
 	if !confirmed {
 		return ErrDeleteNotConfirmed
 	}
@@ -202,13 +202,15 @@ func (m *Manager) Delete(ctx context.Context, id string, confirmed bool, force b
 		_ = m.worktree.Remove(worktreePath, true)
 	}
 
-	// Delete the git branch.
-	out, err := exec.Command("git", "-C", m.cfg.RepoPath, "branch", "-d", sw.Branch).Output() //nolint:gosec
-	if err != nil {
-		out2, err2 := exec.Command("git", "-C", m.cfg.RepoPath, "branch", "-D", sw.Branch).Output() //nolint:gosec
-		if err2 != nil {
-			fmt.Fprintf(os.Stderr, "failed to delete branch %q: %v (output: %s %s)\n",
-				sw.Branch, err2, out, out2)
+	// Delete the git branch only when explicitly requested.
+	if deleteBranch {
+		out, err := exec.Command("git", "-C", m.cfg.RepoPath, "branch", "-d", sw.Branch).Output() //nolint:gosec
+		if err != nil {
+			out2, err2 := exec.Command("git", "-C", m.cfg.RepoPath, "branch", "-D", sw.Branch).Output() //nolint:gosec
+			if err2 != nil {
+				fmt.Fprintf(os.Stderr, "failed to delete branch %q: %v (output: %s %s)\n",
+					sw.Branch, err2, out, out2)
+			}
 		}
 	}
 

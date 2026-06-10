@@ -184,12 +184,15 @@ Capture recent terminal output from a workspace's tmux pane.
 
 ### `workspace_delete`
 
-Permanently delete a workspace and its git branch. **Irreversible.**
+Permanently delete a workspace. **Irreversible.**
+
+The git branch is **preserved by default** so it remains available for a PR or review. Pass `delete_branch: true` to also remove it.
 
 **Inputs:**
 - `id` (string, required)
 - `confirm` (bool, required) — must be `true`
 - `force` (bool, optional) — skip dirty/unpushed branch safety check
+- `delete_branch` (bool, optional, default `false`) — also delete the git branch after removing the worktree
 
 **Output:** `{"deleted": true, "id": "<id>"}`
 
